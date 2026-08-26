@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Rhino 8.20+ defaults to .NET 8. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <TargetExt>.rhp</TargetExt>
+
+    <RootNamespace>Shrike</RootNamespace>
+    <AssemblyName>Shrike</AssemblyName>
+
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <Version>0.1.0</Version>
+    <Company>Shrike</Company>
+    <Product>Shrike</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Current stable Rhino 8 RhinoCommon package when this starter was generated. -->
+    <PackageReference Include="RhinoCommon" Version="8.34.26223.11001" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- Rhino 8 RegisterPanel overload can load an embedded icon by resource name.
+       This avoids directly using System.Drawing.Icon in our source code. -->
+  <ItemGroup>
+    <None Remove="Resources\Shrike.ico" />
+    <EmbeddedResource Include="Resources\Shrike.ico" LogicalName="Shrike.Resources.Shrike.ico" />
+  </ItemGroup>
+
+  <!-- CRITICAL:
+       Tool scripts/manifests/icons must exist next to the built .rhp.
+       This copies Tools/** every time the project builds. -->
+  <ItemGroup>
+    <None Update="Tools\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+	<None Remove="Resources\DefaultToolIcon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+		<None Remove="Resources\NewToolIcon.png" />
+		<EmbeddedResource
+		  Include="Resources\NewToolIcon.png"
+		  LogicalName="Shrike.Resources.NewToolIcon.png" />
+
+		<None Remove="Resources\RefreshIcon.png" />
+		<EmbeddedResource
+		  Include="Resources\RefreshIcon.png"
+		  LogicalName="Shrike.Resources.RefreshIcon.png" />
+
+	    <None Remove="Resources\ImportToolIcon.png" />
+	    <EmbeddedResource Include="Resources\ImportToolIcon.png"
+		LogicalName="Shrike.Resources.ImportToolIcon.png" />
+   </ItemGroup>
+
+</Project>
