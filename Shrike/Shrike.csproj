@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Rhino 8.20+ defaults to .NET 8. -->
@@ -46,12 +46,13 @@
   </ItemGroup>
 
   <ItemGroup>
+	  
 		<None Remove="Resources\NewToolIcon.png" />
 		<EmbeddedResource
 		  Include="Resources\NewToolIcon.png"
 		  LogicalName="Shrike.Resources.NewToolIcon.png" />
 
-		<None Remove="Resources\RefreshIcon.png" />
+	    <None Remove="Resources\RefreshIcon.png" />
 		<EmbeddedResource
 		  Include="Resources\RefreshIcon.png"
 		  LogicalName="Shrike.Resources.RefreshIcon.png" />
@@ -67,6 +68,11 @@
 	  <None Remove="Resources\DefaultMacroIcon.png" />
 	  <EmbeddedResource Include="Resources\DefaultMacroIcon.png"
 						LogicalName="Shrike.Resources.DefaultMacroIcon.png" />
+
+	  <None Remove="Resources\PanelOptionsIcon.png" />
+	  <EmbeddedResource Include="Resources\PanelOptionsIcon.png"
+						LogicalName="Shrike.Resources.PanelOptionsIcon.png" />
+	  
    </ItemGroup>
 
 </Project>

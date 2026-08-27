@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Eto.Drawing;
 using Eto.Forms;
@@ -25,6 +26,9 @@ public sealed class ToolboxPanel : Panel
 
     private const string ImportToolIconResource =
         "Shrike.Resources.ImportToolIcon.png";
+
+    private const string PanelOptionsIconResource =
+        "Shrike.Resources.PanelOptionsIcon.png";
 
     private const string RefreshIconResource =
         "Shrike.Resources.RefreshIcon.png";
@@ -100,6 +104,17 @@ public sealed class ToolboxPanel : Panel
                 ? searchPreferredHeight
                 : 30;
 
+        var managementButton =
+            CreateHeaderIconButton(
+                PanelOptionsIconResource,
+                "Panel Options",
+                headerControlHeight);
+
+        managementButton.Click +=
+            (_, _) =>
+                ShowPanelManagementMenu(
+                    managementButton);
+
         var createButton =
             CreateHeaderIconButton(
                 NewToolIconResource,
@@ -147,6 +162,7 @@ public sealed class ToolboxPanel : Panel
                         _searchBox,
                         expand: true),
 
+                    managementButton,
                     createButton,
                     importButton,
                     refreshButton
@@ -247,6 +263,127 @@ public sealed class ToolboxPanel : Panel
                 resourceName);
 
         return button;
+    }
+
+    private void ShowPanelManagementMenu(
+        Control anchor)
+    {
+        var isSearching =
+            !string.IsNullOrWhiteSpace(
+                _searchBox.Text);
+
+        var menu =
+            new ContextMenu();
+
+        var expandAllItem =
+            new ButtonMenuItem
+            {
+                Text = "Expand All",
+                Enabled = !isSearching
+            };
+
+        expandAllItem.Click +=
+            (_, _) =>
+                SetAllCategoriesExpanded(
+                    true);
+
+        menu.Items.Add(
+            expandAllItem);
+
+        var collapseAllItem =
+            new ButtonMenuItem
+            {
+                Text = "Collapse All",
+                Enabled = !isSearching
+            };
+
+        collapseAllItem.Click +=
+            (_, _) =>
+                SetAllCategoriesExpanded(
+                    false);
+
+        menu.Items.Add(
+            collapseAllItem);
+
+        menu.Items.Add(
+            new SeparatorMenuItem());
+
+        var openUserToolsFolderItem =
+            new ButtonMenuItem
+            {
+                Text = "Open User Tools Folder"
+            };
+
+        openUserToolsFolderItem.Click +=
+            (_, _) =>
+                OpenUserToolsFolder();
+
+        menu.Items.Add(
+            openUserToolsFolderItem);
+
+        menu.Show(
+            anchor,
+            new PointF(
+                0,
+                anchor.Height));
+    }
+
+    private void SetAllCategoriesExpanded(
+        bool expanded)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                _searchBox.Text))
+        {
+            return;
+        }
+
+        foreach (var category in
+                 _tools
+                     .Select(
+                         tool =>
+                             tool.Category)
+                     .Where(
+                         category =>
+                             !string.IsNullOrWhiteSpace(
+                                 category))
+                     .Distinct(
+                         StringComparer.OrdinalIgnoreCase))
+        {
+            _categoryExpandedStates[
+                category] =
+                expanded;
+        }
+
+        _categoryExpandedStates[
+            FavoritesSectionKey] =
+            expanded;
+
+        RebuildToolList();
+    }
+
+    private void OpenUserToolsFolder()
+    {
+        try
+        {
+            var folder =
+                _repository.UserToolsRoot;
+
+            Directory.CreateDirectory(
+                folder);
+
+            Process.Start(
+                new ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true
+                });
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                "Shrike could not open the User Tools folder.\n\n" +
+                ex.Message);
+        }
     }
 
     private void OnWatchedToolsChanged(
@@ -1213,6 +1350,10 @@ public sealed class ToolboxPanel : Panel
              ?? string.Empty)
             .Trim();
 
+        var isSearching =
+            !string.IsNullOrWhiteSpace(
+                query);
+
         var filtered =
             _tools
                 .Where(
@@ -1231,7 +1372,8 @@ public sealed class ToolboxPanel : Panel
         }
 
         AddFavoritesSection(
-            filtered);
+            filtered,
+            isSearching);
 
         foreach (var category in
                  filtered
@@ -1245,12 +1387,14 @@ public sealed class ToolboxPanel : Panel
             AddCategorySection(
                 category.Key,
                 category,
-                category.Key);
+                category.Key,
+                forceExpanded: isSearching);
         }
     }
 
     private void AddFavoritesSection(
-        IReadOnlyList<ToolDefinition> filteredTools)
+        IReadOnlyList<ToolDefinition> filteredTools,
+        bool forceExpanded)
     {
         var favorites =
             filteredTools
@@ -1269,25 +1413,35 @@ public sealed class ToolboxPanel : Panel
         AddCategorySection(
             "★ Favorites",
             favorites,
-            FavoritesSectionKey);
+            FavoritesSectionKey,
+            forceExpanded);
     }
 
     private void AddCategorySection(
         string displayName,
         IEnumerable<ToolDefinition> tools,
-        string stateKey)
+        string stateKey,
+        bool forceExpanded = false)
     {
         var content =
             CreateCategoryContent(
                 tools);
 
-        var expanded =
+        var savedExpanded =
             !_categoryExpandedStates
                 .TryGetValue(
                     stateKey,
                     out var savedState)
             ||
             savedState;
+
+        // Search is temporary UI state:
+        // categories containing matches are always expanded,
+        // but their saved collapsed/expanded state is not changed.
+        var expanded =
+            forceExpanded
+                ? true
+                : savedExpanded;
 
         var section =
             new CollapsibleCategoryPanel(
@@ -1298,6 +1452,9 @@ public sealed class ToolboxPanel : Panel
         section.ExpandedChanged +=
             (_, _) =>
             {
+                if (forceExpanded)
+                    return;
+
                 _categoryExpandedStates[
                     stateKey] =
                     section.Expanded;
