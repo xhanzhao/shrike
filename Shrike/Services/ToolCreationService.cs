@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -8,8 +8,11 @@ namespace Shrike.Services;
 
 public sealed class ToolCreationService
 {
-    private const string DefaultIconResource =
+    private const string DefaultToolIconResource =
         "Shrike.Resources.DefaultToolIcon.png";
+
+    private const string DefaultMacroIconResource =
+        "Shrike.Resources.DefaultMacroIcon.png";
 
     private readonly JsonSerializerOptions _jsonOptions =
         new()
@@ -106,7 +109,8 @@ public sealed class ToolCreationService
             var iconFileName =
                 CreateToolIcon(
                     request.SourceIconPath,
-                    destination);
+                    destination,
+                    type);
 
             var manifest =
                 new Dictionary<string, object?>
@@ -247,14 +251,16 @@ public sealed class ToolCreationService
     }
 
     private static string CreateToolIcon(
-        string sourceIconPath,
-        string destination)
+    string sourceIconPath,
+    string destination,
+    string toolType)
     {
         var target =
             Path.Combine(
                 destination,
                 "icon.png");
 
+        // 用户自己选择 Icon 时优先使用。
         if (!string.IsNullOrWhiteSpace(sourceIconPath))
         {
             if (!File.Exists(sourceIconPath))
@@ -281,15 +287,28 @@ public sealed class ToolCreationService
             return "icon.png";
         }
 
+        // 没选 Icon 时根据 Tool Type 使用默认 Icon。
+        var resourceName =
+            string.Equals(
+                toolType,
+                "macro",
+                StringComparison.OrdinalIgnoreCase)
+                ? DefaultMacroIconResource
+                : DefaultToolIconResource;
+
         var assembly =
             Assembly.GetExecutingAssembly();
 
         using var stream =
             assembly.GetManifestResourceStream(
-                DefaultIconResource);
+                resourceName);
 
         if (stream is null)
-            return string.Empty;
+        {
+            throw new InvalidOperationException(
+                "Shrike could not find the embedded default icon:\n\n" +
+                resourceName);
+        }
 
         using var output =
             File.Create(target);

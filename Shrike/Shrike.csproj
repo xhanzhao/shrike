@@ -56,9 +56,17 @@
 		  Include="Resources\RefreshIcon.png"
 		  LogicalName="Shrike.Resources.RefreshIcon.png" />
 
-	    <None Remove="Resources\ImportToolIcon.png" />
-	    <EmbeddedResource Include="Resources\ImportToolIcon.png"
-		LogicalName="Shrike.Resources.ImportToolIcon.png" />
+	  <None Remove="Resources\ImportToolIcon.png" />
+	  <EmbeddedResource Include="Resources\ImportToolIcon.png"
+						LogicalName="Shrike.Resources.ImportToolIcon.png" />
+
+	  <None Remove="Resources\DefaultToolIcon.png" />
+	  <EmbeddedResource Include="Resources\DefaultToolIcon.png"
+						LogicalName="Shrike.Resources.DefaultToolIcon.png" />
+
+	  <None Remove="Resources\DefaultMacroIcon.png" />
+	  <EmbeddedResource Include="Resources\DefaultMacroIcon.png"
+						LogicalName="Shrike.Resources.DefaultMacroIcon.png" />
    </ItemGroup>
 
 </Project>
