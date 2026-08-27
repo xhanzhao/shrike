@@ -42,6 +42,18 @@ public sealed class CollapsibleCategoryPanel : Panel
             _headerButton.ContextMenu = value;
     }
 
+    /// <summary>
+    /// Optional background color for the category header.
+    /// </summary>
+    public Color? HeaderBackgroundColor
+    {
+        get =>
+            _headerButton.CustomBackgroundColor;
+
+        set =>
+            _headerButton.CustomBackgroundColor = value;
+    }
+
     public CollapsibleCategoryPanel(
         string title,
         Control categoryContent,

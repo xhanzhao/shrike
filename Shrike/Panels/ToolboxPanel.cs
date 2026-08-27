@@ -862,6 +862,19 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
+        var targetCategoryAlreadyExisted =
+            _tools.Any(
+                tool =>
+                    !string.Equals(
+                        tool.Category,
+                        categoryName,
+                        StringComparison.OrdinalIgnoreCase)
+                    &&
+                    string.Equals(
+                        tool.Category,
+                        newCategory,
+                        StringComparison.OrdinalIgnoreCase));
+
         if (!_managementService.RenameCategory(
                 categoryTools,
                 newCategory,
@@ -870,6 +883,11 @@ public sealed class ToolboxPanel : Panel
             ShowError(error);
             return;
         }
+
+        _settingsService.RenameCategoryColor(
+            categoryName,
+            newCategory,
+            targetCategoryAlreadyExisted);
 
         if (_categoryExpandedStates.TryGetValue(
                 categoryName,
@@ -972,39 +990,55 @@ public sealed class ToolboxPanel : Panel
     }
 
     private ContextMenu CreateCategoryContextMenu(
-        string categoryName)
+        string displayName,
+        string categoryKey)
     {
-        var categoryTools =
-            _tools
-                .Where(
-                    tool =>
-                        string.Equals(
-                            tool.Category,
-                            categoryName,
-                            StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
         var menu =
             new ContextMenu();
 
-        var renameItem =
-            new ButtonMenuItem
-            {
-                Text =
-                    "Rename Category",
+        var isFavorites =
+            string.Equals(
+                categoryKey,
+                FavoritesSectionKey,
+                StringComparison.Ordinal);
 
-                Enabled =
-                    _managementService.CanRenameCategory(
-                        categoryTools)
-            };
+        if (!isFavorites)
+        {
+            var categoryTools =
+                _tools
+                    .Where(
+                        tool =>
+                            string.Equals(
+                                tool.Category,
+                                displayName,
+                                StringComparison.OrdinalIgnoreCase))
+                    .ToList();
 
-        renameItem.Click +=
-            (_, _) =>
-                RenameCategory(
-                    categoryName);
+            var renameItem =
+                new ButtonMenuItem
+                {
+                    Text = "Rename Category",
+
+                    Enabled =
+                        _managementService.CanRenameCategory(
+                            categoryTools)
+                };
+
+            renameItem.Click +=
+                (_, _) =>
+                    RenameCategory(
+                        displayName);
+
+            menu.Items.Add(
+                renameItem);
+
+            menu.Items.Add(
+                new SeparatorMenuItem());
+        }
 
         menu.Items.Add(
-            renameItem);
+            CreateCategoryColorMenu(
+                categoryKey));
 
         return menu;
     }
@@ -1143,6 +1177,10 @@ public sealed class ToolboxPanel : Panel
         _settingsService.SetFavorite(
             tool.Id,
             false);
+
+        _settingsService.SetToolColor(
+            tool.Id,
+            null);
 
         ReloadTools();
     }
@@ -1323,6 +1361,10 @@ public sealed class ToolboxPanel : Panel
         menu.Items.Add(
             changeIconItem);
 
+        menu.Items.Add(
+            CreateToolColorMenu(
+                tool));
+
         var deleteItem =
             new ButtonMenuItem
             {
@@ -1339,6 +1381,184 @@ public sealed class ToolboxPanel : Panel
             deleteItem);
 
         return menu;
+    }
+
+    private ButtonMenuItem CreateToolColorMenu(
+        ToolDefinition tool)
+    {
+        var item =
+            new ButtonMenuItem
+            {
+                Text = "Change Color"
+            };
+
+        PopulateColorMenu(
+            item,
+            _settingsService.GetToolColor(
+                tool.Id),
+            colorHex =>
+            {
+                _settingsService.SetToolColor(
+                    tool.Id,
+                    colorHex);
+
+                RebuildToolList();
+            });
+
+        return item;
+    }
+
+    private ButtonMenuItem CreateCategoryColorMenu(
+        string categoryKey)
+    {
+        var item =
+            new ButtonMenuItem
+            {
+                Text = "Change Category Color"
+            };
+
+        PopulateColorMenu(
+            item,
+            _settingsService.GetCategoryColor(
+                categoryKey),
+            colorHex =>
+            {
+                _settingsService.SetCategoryColor(
+                    categoryKey,
+                    colorHex);
+
+                RebuildToolList();
+            });
+
+        return item;
+    }
+
+    private void PopulateColorMenu(
+        ButtonMenuItem parent,
+        string? currentColorHex,
+        Action<string?> applyColor)
+    {
+        var defaultItem =
+            new ButtonMenuItem
+            {
+                Text = "Default"
+            };
+
+        defaultItem.Click +=
+            (_, _) =>
+                applyColor(null);
+
+        parent.Items.Add(
+            defaultItem);
+
+        parent.Items.Add(
+            new SeparatorMenuItem());
+
+        foreach (var preset in
+                 GetColorPresets())
+        {
+            var colorHex =
+                preset.Hex;
+
+            var presetItem =
+                new ButtonMenuItem
+                {
+                    Text = preset.Name
+                };
+
+            presetItem.Click +=
+                (_, _) =>
+                    applyColor(
+                        colorHex);
+
+            parent.Items.Add(
+                presetItem);
+        }
+
+        parent.Items.Add(
+            new SeparatorMenuItem());
+
+        var customItem =
+            new ButtonMenuItem
+            {
+                Text = "Custom..."
+            };
+
+        customItem.Click +=
+            (_, _) =>
+            {
+                var initialColor =
+                    TryParseUiColor(
+                        currentColorHex,
+                        out var parsed)
+                        ? parsed
+                        : SystemColors.ControlBackground;
+
+                var dialog =
+                    new ColorDialog
+                    {
+                        Color = initialColor
+                    };
+
+                var result =
+                    dialog.ShowDialog(
+                        this);
+
+                if (result !=
+                    DialogResult.Ok)
+                {
+                    return;
+                }
+
+                applyColor(
+                    ToColorHex(
+                        dialog.Color));
+            };
+
+        parent.Items.Add(
+            customItem);
+    }
+
+    private static IReadOnlyList<(string Name, string Hex)>
+        GetColorPresets()
+    {
+        return new (string Name, string Hex)[]
+        {
+            ("Red", "#F8DEDE"),
+            ("Orange", "#F7E6D2"),
+            ("Yellow", "#F8F1C9"),
+            ("Green", "#DDEEDF"),
+            ("Blue", "#DDEAF7"),
+            ("Purple", "#E8DFF2"),
+            ("Gray", "#E5E7EA")
+        };
+    }
+
+    private static bool TryParseUiColor(
+        string? colorHex,
+        out Color color)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                colorHex)
+            &&
+            Color.TryParse(
+                colorHex,
+                out color))
+        {
+            return true;
+        }
+
+        color =
+            Colors.Transparent;
+
+        return false;
+    }
+
+    private static string ToColorHex(
+        Color color)
+    {
+        return
+            $"#{color.Rb:X2}{color.Gb:X2}{color.Bb:X2}";
     }
 
     private void RebuildToolList()
@@ -1449,6 +1669,15 @@ public sealed class ToolboxPanel : Panel
                 content,
                 expanded);
 
+        if (TryParseUiColor(
+                _settingsService.GetCategoryColor(
+                    stateKey),
+                out var categoryColor))
+        {
+            section.HeaderBackgroundColor =
+                categoryColor;
+        }
+
         section.ExpandedChanged +=
             (_, _) =>
             {
@@ -1460,15 +1689,10 @@ public sealed class ToolboxPanel : Panel
                     section.Expanded;
             };
 
-        if (!string.Equals(
-                stateKey,
-                FavoritesSectionKey,
-                StringComparison.Ordinal))
-        {
-            section.HeaderContextMenu =
-                CreateCategoryContextMenu(
-                    displayName);
-        }
+        section.HeaderContextMenu =
+            CreateCategoryContextMenu(
+                displayName,
+                stateKey);
 
         _toolList.Items.Add(
             section);
@@ -1595,6 +1819,15 @@ public sealed class ToolboxPanel : Panel
 
                 CenterContent = false
             };
+
+        if (TryParseUiColor(
+                _settingsService.GetToolColor(
+                    tool.Id),
+                out var toolColor))
+        {
+            button.CustomBackgroundColor =
+                toolColor;
+        }
 
         var iconPath =
             GetIconPath(

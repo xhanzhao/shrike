@@ -17,6 +17,7 @@ public sealed class RoundedButton : Drawable
 
     private string _text = string.Empty;
     private Image? _image;
+    private Color? _customBackgroundColor;
 
     public event EventHandler? Click;
 
@@ -45,6 +46,22 @@ public sealed class RoundedButton : Drawable
     }
 
     public Font? TextFont { get; set; }
+
+    /// <summary>
+    /// Optional custom background color. Null uses the normal system color.
+    /// Hover / pressed shades and readable text color are derived automatically.
+    /// </summary>
+    public Color? CustomBackgroundColor
+    {
+        get => _customBackgroundColor;
+        set
+        {
+            _customBackgroundColor = value;
+
+            if (Loaded)
+                Invalidate();
+        }
+    }
 
     public float CornerRadius { get; set; } = 8f;
 
@@ -154,6 +171,8 @@ public sealed class RoundedButton : Drawable
         e.Graphics.AntiAlias = true;
 
         var baseBackground =
+            CustomBackgroundColor
+            ??
             SystemColors.ControlBackground;
 
         var fillColor =
@@ -164,8 +183,8 @@ public sealed class RoundedButton : Drawable
             fillColor =
                 Color.Blend(
                     baseBackground,
-                    SystemColors.Highlight,
-                    0.08f);
+                    Colors.Black,
+                    0.06f);
         }
 
         if (_mouseDown)
@@ -173,14 +192,20 @@ public sealed class RoundedButton : Drawable
             fillColor =
                 Color.Blend(
                     baseBackground,
-                    SystemColors.Highlight,
-                    0.15f);
+                    Colors.Black,
+                    0.12f);
         }
+
+        var borderReference =
+            CustomBackgroundColor.HasValue
+                ? GetReadableTextColor(
+                    baseBackground)
+                : SystemColors.ControlText;
 
         var borderColor =
             Color.Blend(
                 baseBackground,
-                SystemColors.ControlText,
+                borderReference,
                 0.20f);
 
         if (HasFocus)
@@ -267,6 +292,21 @@ public sealed class RoundedButton : Drawable
             innerPath);
     }
 
+    private static Color GetReadableTextColor(
+        Color background)
+    {
+        var luminance =
+            0.2126f * background.R
+            +
+            0.7152f * background.G
+            +
+            0.0722f * background.B;
+
+        return luminance < 0.52f
+            ? Colors.White
+            : Colors.Black;
+    }
+
     private void DrawContent(Graphics graphics)
     {
         var font =
@@ -275,7 +315,10 @@ public sealed class RoundedButton : Drawable
 
         var textColor =
             Enabled
-                ? SystemColors.ControlText
+                ? CustomBackgroundColor.HasValue
+                    ? GetReadableTextColor(
+                        CustomBackgroundColor.Value)
+                    : SystemColors.ControlText
                 : SystemColors.DisabledText;
 
         var hasText =
