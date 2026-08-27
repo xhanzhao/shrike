@@ -5,21 +5,26 @@ namespace Shrike.Services;
 
 public sealed class ToolExecutionService
 {
-    private readonly IReadOnlyList<IToolRunner> _runners;
+    private readonly IReadOnlyList<IToolRunner>
+        _runners;
 
     public ToolExecutionService()
     {
-        _runners = new IToolRunner[]
-        {
-            new Python3ToolRunner()
-        };
+        _runners =
+            new IToolRunner[]
+            {
+                new Python3ToolRunner(),
+                new MacroToolRunner()
+            };
     }
 
-    public bool Run(ToolDefinition tool)
+    public bool Run(
+        ToolDefinition tool)
     {
         var runner =
             _runners.FirstOrDefault(
-                candidate => candidate.CanRun(tool));
+                candidate =>
+                    candidate.CanRun(tool));
 
         if (runner is null)
         {

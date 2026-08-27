@@ -442,6 +442,9 @@ public sealed class ToolboxPanel : Panel
     private void EditToolScript(
         ToolDefinition tool)
     {
+        if (!IsPythonTool(tool))
+            return;
+
         if (!_managementService.EditScript(
                 tool,
                 out var error))
@@ -450,9 +453,75 @@ public sealed class ToolboxPanel : Panel
         }
     }
 
+    private void EditToolMacro(
+        ToolDefinition tool)
+    {
+        if (!IsMacroTool(tool))
+            return;
+
+        if (!_managementService.CanModify(tool))
+        {
+            ShowReadOnlyMessage();
+            return;
+        }
+
+        var dialog =
+            new EditMacroDialog(
+                tool.Name,
+                tool.Command,
+                TestRunMacro);
+
+        var accepted =
+            ShowDialog(dialog);
+
+        if (!accepted)
+            return;
+
+        if (!_managementService.UpdateMacro(
+                tool,
+                dialog.Macro,
+                out var error))
+        {
+            ShowError(error);
+            return;
+        }
+
+        ReloadTools();
+    }
+
+    private void TestRunMacro(
+        string macro)
+    {
+        if (string.IsNullOrWhiteSpace(macro))
+            return;
+
+        try
+        {
+            var success =
+                RhinoApp.RunScript(
+                    macro,
+                    echo: false);
+
+            if (!success)
+            {
+                ShowError(
+                    "Rhino could not complete the Macro test run.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                "Shrike could not test the Macro.\n\n" +
+                ex.Message);
+        }
+    }
+
     private void ReplaceToolScript(
         ToolDefinition tool)
     {
+        if (!IsPythonTool(tool))
+            return;
+
         if (!_managementService.CanModify(tool))
         {
             ShowReadOnlyMessage();
@@ -961,36 +1030,51 @@ public sealed class ToolboxPanel : Panel
         menu.Items.Add(
             runItem);
 
-        var editItem =
-            new ButtonMenuItem
-            {
-                Text = "Edit Script"
-            };
+        if (IsPythonTool(tool))
+        {
+            var editItem =
+                new ButtonMenuItem
+                {
+                    Text = "Edit Script"
+                };
 
-        editItem.Click +=
-            (_, _) =>
-                EditToolScript(
-                    tool);
+            editItem.Click +=
+                (_, _) =>
+                    EditToolScript(tool);
 
-        menu.Items.Add(
-            editItem);
+            menu.Items.Add(editItem);
 
-        var replaceScriptItem =
-            new ButtonMenuItem
-            {
-                Text = "Replace Script",
-                Enabled =
-                    _managementService.CanModify(
-                        tool)
-            };
+            var replaceScriptItem =
+                new ButtonMenuItem
+                {
+                    Text = "Replace Script",
+                    Enabled =
+                        _managementService.CanModify(tool)
+                };
 
-        replaceScriptItem.Click +=
-            (_, _) =>
-                ReplaceToolScript(
-                    tool);
+            replaceScriptItem.Click +=
+                (_, _) =>
+                    ReplaceToolScript(tool);
 
-        menu.Items.Add(
-            replaceScriptItem);
+            menu.Items.Add(replaceScriptItem);
+        }
+
+        if (IsMacroTool(tool))
+        {
+            var editMacroItem =
+                new ButtonMenuItem
+                {
+                    Text = "Edit Macro",
+                    Enabled =
+                        _managementService.CanModify(tool)
+                };
+
+            editMacroItem.Click +=
+                (_, _) =>
+                    EditToolMacro(tool);
+
+            menu.Items.Add(editMacroItem);
+        }
 
         var openFolderItem =
             new ButtonMenuItem
@@ -1261,6 +1345,34 @@ public sealed class ToolboxPanel : Panel
         return stack;
     }
 
+    private static bool IsPythonTool(
+        ToolDefinition tool)
+    {
+        return string.Equals(
+                   tool.Type,
+                   "python3",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   tool.Type,
+                   "python",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMacroTool(
+        ToolDefinition tool)
+    {
+        return string.Equals(
+                   tool.Type,
+                   "macro",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   tool.Type,
+                   "rhino-macro",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool Matches(
         ToolDefinition tool,
         string query)
@@ -1336,7 +1448,7 @@ public sealed class ToolboxPanel : Panel
             try
             {
                 button.Image =
-                    new Bitmap(
+                    LoadBitmapFresh(
                         iconPath);
             }
             catch (Exception ex)
@@ -1386,6 +1498,21 @@ public sealed class ToolboxPanel : Panel
                 Text = message,
                 Wrap = WrapMode.Word
             });
+    }
+
+    private static Bitmap LoadBitmapFresh(
+        string path)
+    {
+        var bytes =
+            File.ReadAllBytes(
+                path);
+
+        using var stream =
+            new MemoryStream(
+                bytes);
+
+        return new Bitmap(
+            stream);
     }
 
     private static string? GetIconPath(

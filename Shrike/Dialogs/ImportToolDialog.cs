@@ -6,20 +6,15 @@ namespace Shrike.Dialogs;
 
 public sealed class ImportToolDialog : Dialog<bool>
 {
-    private readonly TextBox
-        _nameTextBox;
-
-    private readonly TextBox
-        _categoryTextBox;
+    private readonly TextBox _nameTextBox;
+    private readonly TextBox _categoryTextBox;
 
     public string ToolName =>
-        (_nameTextBox.Text
-         ?? string.Empty)
+        (_nameTextBox.Text ?? string.Empty)
         .Trim();
 
     public string Category =>
-        (_categoryTextBox.Text
-         ?? string.Empty)
+        (_categoryTextBox.Text ?? string.Empty)
         .Trim();
 
     public ImportToolDialog(
@@ -32,15 +27,13 @@ public sealed class ImportToolDialog : Dialog<bool>
         _nameTextBox =
             new TextBox
             {
-                Text =
-                    packageInfo.Name
+                Text = packageInfo.Name
             };
 
         _categoryTextBox =
             new TextBox
             {
-                Text =
-                    packageInfo.Category
+                Text = packageInfo.Category
             };
 
         var importButton =
@@ -50,8 +43,7 @@ public sealed class ImportToolDialog : Dialog<bool>
             };
 
         importButton.Click +=
-            (_, _) =>
-                TryAccept();
+            (_, _) => TryAccept();
 
         var cancelButton =
             new Button
@@ -60,43 +52,36 @@ public sealed class ImportToolDialog : Dialog<bool>
             };
 
         cancelButton.Click +=
-            (_, _) =>
-                Close(false);
+            (_, _) => Close(false);
 
-        DefaultButton =
-            importButton;
+        DefaultButton = importButton;
+        AbortButton = cancelButton;
 
-        AbortButton =
-            cancelButton;
+        var typeText =
+            IsMacroType(packageInfo.Type)
+                ? "Rhino Macro"
+                : "Python 3";
 
         var infoLabel =
             new Label
             {
                 Text =
-                    $"Type: {packageInfo.Type}    Entry: {packageInfo.Entry}"
+                    $"Type: {typeText}"
             };
 
         var layout =
             new DynamicLayout
             {
                 Padding = 12,
-
-                Spacing =
-                    new Size(8, 8)
+                Spacing = new Size(8, 8)
             };
 
         layout.AddRow(
-            new Label
-            {
-                Text = "Tool Name"
-            },
+            new Label { Text = "Tool Name" },
             _nameTextBox);
 
         layout.AddRow(
-            new Label
-            {
-                Text = "Category"
-            },
+            new Label { Text = "Category" },
             _categoryTextBox);
 
         layout.AddRow(
@@ -108,14 +93,26 @@ public sealed class ImportToolDialog : Dialog<bool>
             importButton,
             cancelButton);
 
-        Content =
-            layout;
+        Content = layout;
+    }
+
+    private static bool IsMacroType(
+        string type)
+    {
+        return string.Equals(
+                   type,
+                   "macro",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   type,
+                   "rhino-macro",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private void TryAccept()
     {
-        if (string.IsNullOrWhiteSpace(
-                ToolName))
+        if (string.IsNullOrWhiteSpace(ToolName))
         {
             MessageBox.Show(
                 "Tool name cannot be empty.",
@@ -126,8 +123,7 @@ public sealed class ImportToolDialog : Dialog<bool>
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(
-                Category))
+        if (string.IsNullOrWhiteSpace(Category))
         {
             MessageBox.Show(
                 "Category cannot be empty.",

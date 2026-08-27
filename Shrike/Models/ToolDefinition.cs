@@ -10,11 +10,11 @@ public sealed class ToolDefinition
 
     public string Category { get; set; } = "Uncategorized";
 
-    // First version supports "python3".
-    // "python" is accepted as an alias for convenience.
     public string Type { get; set; } = "python3";
 
     public string Entry { get; set; } = "main.py";
+
+    public string Command { get; set; } = string.Empty;
 
     public string Icon { get; set; } = string.Empty;
 

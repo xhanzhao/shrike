@@ -92,6 +92,11 @@ public sealed class ToolPackageService
                     manifest,
                     "entry");
 
+            var command =
+                ReadString(
+                    manifest,
+                    "command");
+
             if (string.IsNullOrWhiteSpace(name)
                 ||
                 string.IsNullOrWhiteSpace(category))
@@ -107,7 +112,9 @@ public sealed class ToolPackageService
                 type = "python3";
             }
 
-            if (string.IsNullOrWhiteSpace(entry))
+            if (IsPythonType(type)
+                &&
+                string.IsNullOrWhiteSpace(entry))
             {
                 entry = "main.py";
             }
@@ -118,7 +125,8 @@ public sealed class ToolPackageService
                     Name = name,
                     Category = category,
                     Type = type,
-                    Entry = entry
+                    Entry = entry,
+                    Command = command
                 };
 
             return true;
@@ -261,50 +269,58 @@ public sealed class ToolPackageService
                     manifest,
                     "entry");
 
-            if (string.IsNullOrWhiteSpace(
-                    entry))
-            {
-                entry =
-                    "main.py";
-            }
-
-            var safeEntryPath =
-                GetSafeContainedPath(
-                    tempRoot,
-                    entry);
-
-            if (!File.Exists(
-                    safeEntryPath))
-            {
-                return ToolCreationResult.Fail(
-                    $"The package entry script does not exist:\n\n{entry}");
-            }
-
             var type =
                 ReadString(
                     manifest,
                     "type");
 
-            if (string.IsNullOrWhiteSpace(
-                    type))
+            var command =
+                ReadString(
+                    manifest,
+                    "command");
+
+            if (string.IsNullOrWhiteSpace(type))
             {
-                type =
-                    "python3";
+                type = "python3";
             }
 
-            if (!string.Equals(
-                    type,
-                    "python3",
-                    StringComparison.OrdinalIgnoreCase)
-                &&
-                !string.Equals(
-                    type,
-                    "python",
-                    StringComparison.OrdinalIgnoreCase))
+            string normalizedType;
+
+            if (IsPythonType(type))
+            {
+                normalizedType = "python3";
+
+                if (string.IsNullOrWhiteSpace(entry))
+                {
+                    entry = "main.py";
+                }
+
+                var safeEntryPath =
+                    GetSafeContainedPath(
+                        tempRoot,
+                        entry);
+
+                if (!File.Exists(safeEntryPath))
+                {
+                    return ToolCreationResult.Fail(
+                        $"The package entry script does not exist:\n\n{entry}");
+                }
+            }
+            else if (IsMacroType(type))
+            {
+                normalizedType = "macro";
+
+                if (string.IsNullOrWhiteSpace(command))
+                {
+                    return ToolCreationResult.Fail(
+                        "This Macro tool package does not contain a command.");
+                }
+            }
+            else
             {
                 return ToolCreationResult.Fail(
                     $"Unsupported tool type: {type}\n\n" +
-                    "This Shrike build currently supports Python 3 tools.");
+                    "This Shrike build supports Python 3 and Rhino Macro tools.");
             }
 
             SetCanonicalString(
@@ -326,12 +342,30 @@ public sealed class ToolPackageService
             SetCanonicalString(
                 manifest,
                 "type",
-                "python3");
+                normalizedType);
 
-            SetCanonicalString(
-                manifest,
-                "entry",
-                entry);
+            if (normalizedType == "python3")
+            {
+                SetCanonicalString(
+                    manifest,
+                    "entry",
+                    entry);
+
+                RemoveCanonicalProperty(
+                    manifest,
+                    "command");
+            }
+            else
+            {
+                SetCanonicalString(
+                    manifest,
+                    "command",
+                    command);
+
+                RemoveCanonicalProperty(
+                    manifest,
+                    "entry");
+            }
 
             // Preserve icon / tooltip if present, but normalize their
             // property casing as well.
@@ -654,6 +688,56 @@ public sealed class ToolPackageService
         return value
             .Replace('\\', '/')
             .TrimStart('/');
+    }
+
+    private static bool IsPythonType(
+        string type)
+    {
+        return string.Equals(
+                   type,
+                   "python3",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   type,
+                   "python",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMacroType(
+        string type)
+    {
+        return string.Equals(
+                   type,
+                   "macro",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   type,
+                   "rhino-macro",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RemoveCanonicalProperty(
+        JsonObject manifest,
+        string propertyName)
+    {
+        var matchingKeys =
+            manifest
+                .Select(
+                    property => property.Key)
+                .Where(
+                    key =>
+                        string.Equals(
+                            key,
+                            propertyName,
+                            StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        foreach (var key in matchingKeys)
+        {
+            manifest.Remove(key);
+        }
     }
 
     private static string ReadString(

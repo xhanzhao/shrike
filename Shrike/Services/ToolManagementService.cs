@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Rhino;
 using Shrike.Models;
 
 namespace Shrike.Services;
@@ -145,22 +146,33 @@ public sealed class ToolManagementService
 
         try
         {
-            var info =
-                new ProcessStartInfo
-                {
-                    FileName = "notepad.exe",
-                    Arguments = QuoteArgument(scriptPath),
-                    UseShellExecute = true
-                };
+            var safePath =
+                scriptPath.Replace(
+                    "\"",
+                    "\"\"");
 
-            Process.Start(info);
+            var macro =
+                $"_-ScriptEditor _O \"{safePath}\"";
+
+            var opened =
+                RhinoApp.RunScript(
+                    macro,
+                    echo: false);
+
+            if (!opened)
+            {
+                error =
+                    "Rhino could not open the script in Script Editor.";
+
+                return false;
+            }
 
             return true;
         }
         catch (Exception ex)
         {
             error =
-                "Shrike could not open the script editor.\n\n" +
+                "Shrike could not open the script in Rhino Script Editor.\n\n" +
                 ex.Message;
 
             return false;
@@ -284,6 +296,52 @@ public sealed class ToolManagementService
         {
             error =
                 "Shrike could not replace the Python script.\n\n" +
+                ex.Message;
+
+            return false;
+        }
+    }
+
+    public bool UpdateMacro(
+        ToolDefinition tool,
+        string macro,
+        out string error)
+    {
+        error = string.Empty;
+
+        if (!CanModify(tool))
+        {
+            error =
+                "Bundled tools are read-only. " +
+                "Only user-created Macro tools can be edited.";
+
+            return false;
+        }
+
+        if (!IsMacroTool(tool))
+        {
+            error = "This tool is not a Rhino Macro tool.";
+            return false;
+        }
+
+        macro = (macro ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(macro))
+        {
+            error = "Macro cannot be empty.";
+            return false;
+        }
+
+        try
+        {
+            tool.Command = macro;
+            SaveManifest(tool);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error =
+                "Shrike could not save the Macro.\n\n" +
                 ex.Message;
 
             return false;
@@ -966,6 +1024,20 @@ public sealed class ToolManagementService
         }
     }
 
+    private static bool IsMacroTool(
+        ToolDefinition tool)
+    {
+        return string.Equals(
+                   tool.Type,
+                   "macro",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               string.Equals(
+                   tool.Type,
+                   "rhino-macro",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string PreparePython3Script(
         string source)
     {
@@ -1039,6 +1111,13 @@ public sealed class ToolManagementService
             string.IsNullOrWhiteSpace(sourceTool.Entry)
                 ? "main.py"
                 : sourceTool.Entry;
+
+        if (!string.IsNullOrWhiteSpace(
+                sourceTool.Command))
+        {
+            manifest["command"] =
+                sourceTool.Command;
+        }
 
         manifest["icon"] =
             sourceTool.Icon ?? string.Empty;
