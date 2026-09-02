@@ -43,9 +43,14 @@ public sealed class ToolboxPanel : Panel
     private readonly ToolPackageService _packageService;
     private readonly UserSettingsService _settingsService;
     private readonly ToolWatchService _watchService;
+    private readonly MacroRecorderService _macroRecorderService;
 
     private readonly TextBox _searchBox;
     private readonly StackLayout _toolList;
+    private readonly Panel _recordingBar;
+
+    private CreateToolRequest?
+        _macroRecordingDraft;
 
     private readonly Dictionary<string, bool>
         _categoryExpandedStates =
@@ -81,6 +86,9 @@ public sealed class ToolboxPanel : Panel
 
         _watchService.ToolsChanged +=
             OnWatchedToolsChanged;
+
+        _macroRecorderService =
+            new MacroRecorderService();
 
         _searchBox =
             new TextBox
@@ -169,6 +177,55 @@ public sealed class ToolboxPanel : Panel
                 }
             };
 
+        var stopRecordingButton =
+            new Button
+            {
+                Text = "Stop",
+                Width = 62
+            };
+
+        stopRecordingButton.Click +=
+            (_, _) =>
+                StopMacroRecording();
+
+        _recordingBar =
+            new Panel
+            {
+                Visible = false,
+
+                Padding =
+                    new Padding(
+                        left: 8,
+                        top: 4,
+                        right: 4,
+                        bottom: 4),
+
+                Content =
+                    new StackLayout
+                    {
+                        Orientation =
+                            Orientation.Horizontal,
+
+                        Spacing = 8,
+
+                        VerticalContentAlignment =
+                            VerticalAlignment.Center,
+
+                        Items =
+                        {
+                            new StackLayoutItem(
+                                new Label
+                                {
+                                    Text =
+                                        "● Recording Macro..."
+                                },
+                                expand: true),
+
+                            stopRecordingButton
+                        }
+                    }
+            };
+
         _toolList =
             new StackLayout
             {
@@ -216,6 +273,8 @@ public sealed class ToolboxPanel : Panel
                 Items =
                 {
                     header,
+
+                    _recordingBar,
 
                     new StackLayoutItem(
                         scrollable,
@@ -408,13 +467,32 @@ public sealed class ToolboxPanel : Panel
         RebuildToolList();
     }
 
-    private void CreateNewTool()
+    private void CreateNewTool(
+        CreateToolRequest? initialRequest = null)
     {
+        if (_macroRecorderService.IsRecording)
+        {
+            ShowError(
+                "Shrike is currently recording a Macro.\n\n" +
+                "Stop the recording before creating another tool.");
+
+            return;
+        }
+
         var dialog =
-            new CreateToolDialog();
+            new CreateToolDialog(
+                initialRequest);
 
         var accepted =
             ShowDialog(dialog);
+
+        if (dialog.RecordMacroRequested)
+        {
+            StartMacroRecording(
+                dialog.DraftRequest);
+
+            return;
+        }
 
         if (!accepted
             ||
@@ -444,6 +522,107 @@ public sealed class ToolboxPanel : Panel
             "Shrike",
             MessageBoxButtons.OK,
             MessageBoxType.Information);
+    }
+
+    private void StartMacroRecording(
+        CreateToolRequest draft)
+    {
+        if (_macroRecorderService.IsRecording)
+            return;
+
+        draft.Type =
+            "macro";
+
+        _macroRecordingDraft =
+            draft;
+
+        _macroRecorderService.Start();
+
+        _recordingBar.Visible =
+            true;
+
+        RhinoApp.WriteLine(
+            "Shrike Macro Recorder is recording. " +
+            "Run Rhino commands, then click Stop in the Shrike panel.");
+
+        RhinoApp.SetFocusToMainWindow();
+    }
+
+    private void StopMacroRecording()
+    {
+        if (!_macroRecorderService.IsRecording)
+            return;
+
+        var recordedMacro =
+            _macroRecorderService.Stop();
+
+        _recordingBar.Visible =
+            false;
+
+        var draft =
+            _macroRecordingDraft
+            ??
+            new CreateToolRequest
+            {
+                Type = "macro",
+                Category = "Utility"
+            };
+
+        _macroRecordingDraft =
+            null;
+
+        if (!string.IsNullOrWhiteSpace(
+                recordedMacro))
+        {
+            draft.Macro =
+                AppendRecordedMacro(
+                    draft.Macro,
+                    recordedMacro);
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                recordedMacro))
+        {
+            RhinoApp.WriteLine(
+                "Shrike Macro Recorder: no completed commands were recorded.");
+        }
+
+        // Reopen Create New Tool with all previous values preserved
+        // and the recorded commands filled into the Macro field.
+        CreateNewTool(
+            draft);
+    }
+
+    private static string AppendRecordedMacro(
+        string existingMacro,
+        string recordedMacro)
+    {
+        var existing =
+            (existingMacro
+             ?? string.Empty)
+            .Trim();
+
+        var recorded =
+            (recordedMacro
+             ?? string.Empty)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                existing))
+        {
+            return recorded;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                recorded))
+        {
+            return existing;
+        }
+
+        return
+            existing +
+            Environment.NewLine +
+            recorded;
     }
 
     private void ImportTool()

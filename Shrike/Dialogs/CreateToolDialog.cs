@@ -12,6 +12,8 @@ public sealed class CreateToolDialog : Dialog<bool>
     private const int PythonInputHeight = 28;
     private const int MacroInputHeight = 78;
 
+    private const int InputActionButtonWidth = 80;
+
     private readonly DropDown
         _typeDropDown;
 
@@ -42,6 +44,15 @@ public sealed class CreateToolDialog : Dialog<bool>
     private readonly Control
         _pythonInputControl;
 
+    private readonly Control
+        _macroInputControl;
+
+    public bool RecordMacroRequested
+    {
+        get;
+        private set;
+    }
+
     public CreateToolRequest? Request
     {
         get;
@@ -53,7 +64,11 @@ public sealed class CreateToolDialog : Dialog<bool>
             ? "macro"
             : "python3";
 
-    public CreateToolDialog()
+    public CreateToolRequest DraftRequest =>
+        BuildRequest();
+
+    public CreateToolDialog(
+        CreateToolRequest? initialRequest = null)
     {
         Title = "Create New Tool";
         Width = 600;
@@ -87,7 +102,7 @@ public sealed class CreateToolDialog : Dialog<bool>
         _categoryTextBox =
             new TextBox
             {
-                Text = "Utilities"
+                Text = "Utility"
             };
 
         _tooltipTextArea =
@@ -121,7 +136,8 @@ public sealed class CreateToolDialog : Dialog<bool>
         var browsePythonButton =
             new Button
             {
-                Text = "Browse..."
+                Text = "Browse...",
+                Width = InputActionButtonWidth
             };
 
         browsePythonButton.Click +=
@@ -131,12 +147,24 @@ public sealed class CreateToolDialog : Dialog<bool>
         var browseIconButton =
             new Button
             {
-                Text = "Browse..."
+                Text = "Browse...",
+                Width = InputActionButtonWidth
             };
 
         browseIconButton.Click +=
             (_, _) =>
                 BrowseIcon();
+
+        var recordMacroButton =
+            new Button
+            {
+                Text = "Record",
+                Width = InputActionButtonWidth
+            };
+
+        recordMacroButton.Click +=
+            (_, _) =>
+                RequestMacroRecording();
 
         _pythonInputControl =
             new TableLayout
@@ -153,6 +181,36 @@ public sealed class CreateToolDialog : Dialog<bool>
 
                         new TableCell(
                             browsePythonButton))
+                }
+            };
+
+        _macroInputControl =
+            new TableLayout
+            {
+                Spacing =
+                    new Size(8, 0),
+
+                Rows =
+                {
+                    new TableRow(
+                        new TableCell(
+                            _macroTextArea,
+                            scaleWidth: true),
+
+                        new TableCell(
+                            new StackLayout
+                            {
+                                Orientation =
+                                    Orientation.Vertical,
+
+                                VerticalContentAlignment =
+                                    VerticalAlignment.Center,
+
+                                Items =
+                                {
+                                    recordMacroButton
+                                }
+                            }))
                 }
             };
 
@@ -277,6 +335,9 @@ public sealed class CreateToolDialog : Dialog<bool>
         Content =
             form;
 
+        ApplyInitialRequest(
+            initialRequest);
+
         _typeDropDown.SelectedIndexChanged +=
             (_, _) =>
                 UpdateToolTypeUi();
@@ -332,7 +393,7 @@ public sealed class CreateToolDialog : Dialog<bool>
                 MacroInputHeight;
 
             _typeInputHost.Content =
-                _macroTextArea;
+                _macroInputControl;
 
             Height =
                 MacroDialogHeight;
@@ -340,6 +401,108 @@ public sealed class CreateToolDialog : Dialog<bool>
 
         _typeInputHost.Invalidate();
         Invalidate();
+    }
+
+    private void ApplyInitialRequest(
+        CreateToolRequest? initialRequest)
+    {
+        if (initialRequest is null)
+            return;
+
+        _typeDropDown.SelectedIndex =
+            string.Equals(
+                initialRequest.Type,
+                "macro",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            string.Equals(
+                initialRequest.Type,
+                "rhino-macro",
+                StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
+
+        _nameTextBox.Text =
+            initialRequest.Name
+            ?? string.Empty;
+
+        _categoryTextBox.Text =
+            string.IsNullOrWhiteSpace(
+                initialRequest.Category)
+                ? "Utility"
+                : initialRequest.Category;
+
+        _tooltipTextArea.Text =
+            initialRequest.Tooltip
+            ?? string.Empty;
+
+        _pythonPathTextBox.Text =
+            initialRequest.SourcePythonPath
+            ?? string.Empty;
+
+        _macroTextArea.Text =
+            initialRequest.Macro
+            ?? string.Empty;
+
+        _iconPathTextBox.Text =
+            initialRequest.SourceIconPath
+            ?? string.Empty;
+    }
+
+    private CreateToolRequest BuildRequest()
+    {
+        return new CreateToolRequest
+        {
+            Name =
+                (_nameTextBox.Text
+                 ?? string.Empty)
+                .Trim(),
+
+            Category =
+                (_categoryTextBox.Text
+                 ?? string.Empty)
+                .Trim(),
+
+            Tooltip =
+                _tooltipTextArea.Text
+                ?? string.Empty,
+
+            Type =
+                SelectedToolType,
+
+            SourcePythonPath =
+                (_pythonPathTextBox.Text
+                 ?? string.Empty)
+                .Trim(),
+
+            Macro =
+                (_macroTextArea.Text
+                 ?? string.Empty)
+                .Trim(),
+
+            SourceIconPath =
+                (_iconPathTextBox.Text
+                 ?? string.Empty)
+                .Trim()
+        };
+    }
+
+    private void RequestMacroRecording()
+    {
+        if (!string.Equals(
+                SelectedToolType,
+                "macro",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        RecordMacroRequested = true;
+
+        // Close the modal dialog so Rhino becomes interactive again.
+        // ToolboxPanel will start recording and reopen this dialog
+        // with the recorded macro after Stop is clicked.
+        Close(false);
     }
 
     private void BrowsePython()
@@ -489,32 +652,7 @@ public sealed class CreateToolDialog : Dialog<bool>
         }
 
         Request =
-            new CreateToolRequest
-            {
-                Name =
-                    name,
-
-                Category =
-                    category,
-
-                Tooltip =
-                    _tooltipTextArea.Text
-                    ?? string.Empty,
-
-                Type =
-                    type,
-
-                SourcePythonPath =
-                    pythonPath,
-
-                Macro =
-                    macro,
-
-                SourceIconPath =
-                    (_iconPathTextBox.Text
-                     ?? string.Empty)
-                    .Trim()
-            };
+            BuildRequest();
 
         Close(true);
     }
