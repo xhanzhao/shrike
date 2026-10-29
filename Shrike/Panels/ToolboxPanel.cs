@@ -13,25 +13,17 @@ namespace Shrike.Panels;
 [Guid("89C2BD00-F9C5-4D03-8229-A24E6A54026B")]
 public sealed class ToolboxPanel : Panel
 {
-    private const int UiGap = 5;
-
-    private const int ToolButtonHeight = 30;
-    private const float ToolCornerRadius = 9f;
-    private const int ToolIconDisplaySize = 18;
 
     private const int HeaderIconDisplaySize = 18;
 
     private const string NewToolIconResource =
         "Shrike.Resources.NewToolIcon.png";
 
-    private const string ImportToolIconResource =
-        "Shrike.Resources.ImportToolIcon.png";
-
     private const string PanelOptionsIconResource =
         "Shrike.Resources.PanelOptionsIcon.png";
 
-    private const string RefreshIconResource =
-        "Shrike.Resources.RefreshIcon.png";
+    private const string DefaultToolIconResource =
+        "Shrike.Resources.DefaultToolIcon.png";
 
     private const string FavoritesSectionKey =
         "__Shrike_favorites__";
@@ -88,89 +80,53 @@ public sealed class ToolboxPanel : Panel
             OnWatchedToolsChanged;
 
         _searchBox =
-            new TextBox
-            {
-                PlaceholderText =
-                    "Search tools..."
-            };
+            Ui.TextBox(
+                placeholder:
+                    "Search tools");
 
         _searchBox.TextChanged +=
             (_, _) =>
                 RebuildToolList();
 
-        var searchPreferredHeight =
-            (int)Math.Ceiling(
-                _searchBox
-                    .GetPreferredSize()
-                    .Height);
+        var addButton =
+            CreateHeaderIconButton(
+                NewToolIconResource,
+                "New or import a tool");
 
-        var headerControlHeight =
-            searchPreferredHeight > 0
-                ? searchPreferredHeight
-                : 30;
+        addButton.Click +=
+            (_, _) =>
+                ShowAddMenu(
+                    addButton);
 
         var managementButton =
             CreateHeaderIconButton(
                 PanelOptionsIconResource,
-                "Panel Options",
-                headerControlHeight);
+                "Panel options");
 
         managementButton.Click +=
             (_, _) =>
                 ShowPanelManagementMenu(
                     managementButton);
 
-        var createButton =
-            CreateHeaderIconButton(
-                NewToolIconResource,
-                "New Tool",
-                headerControlHeight);
-
-        createButton.Click +=
-            (_, _) =>
-                CreateNewTool();
-
-        var importButton =
-            CreateHeaderIconButton(
-                ImportToolIconResource,
-                "Import Tool",
-                headerControlHeight);
-
-        importButton.Click +=
-            (_, _) =>
-                ImportTool();
-
-        var refreshButton =
-            CreateHeaderIconButton(
-                RefreshIconResource,
-                "Refresh",
-                headerControlHeight);
-
-        refreshButton.Click +=
-            (_, _) =>
-                ReloadTools();
-
         var header =
-            new StackLayout
+            new TableLayout
             {
-                Orientation =
-                    Orientation.Horizontal,
+                Spacing =
+                    new Size(Ui.Gap, 0),
 
-                Spacing = 8,
-
-                VerticalContentAlignment =
-                    VerticalAlignment.Center,
-
-                Items =
+                Rows =
                 {
-                    new StackLayoutItem(
-                        _searchBox,
-                        expand: true),
+                    new TableRow(
+                        new TableCell(
+                            new FieldFrame(
+                                _searchBox),
+                            scaleWidth: true),
 
-                    managementButton,
-                    createButton,
-                    importButton,
-                    refreshButton
+                        new TableCell(
+                            addButton),
+
+                        new TableCell(
+                            managementButton))
                 }
             };
 
@@ -180,27 +136,21 @@ public sealed class ToolboxPanel : Panel
                 Orientation =
                     Orientation.Vertical,
 
-                Spacing = UiGap,
+                Spacing = 2,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch
             };
 
-        var toolListHost =
-            new Panel
-            {
-                Padding =
-                    new Padding(UiGap),
-
-                Content =
-                    _toolList
-            };
-
+        // No frame around the list: the categories and rows
+        // sit directly on the panel.
         var scrollable =
             new Scrollable
             {
+                Border = BorderType.None,
                 ExpandContentWidth = true,
-                Content = toolListHost
+                BackgroundColor = Ui.Surface,
+                Content = _toolList
             };
 
         // Results of quick actions are shown here instead of
@@ -225,17 +175,20 @@ public sealed class ToolboxPanel : Panel
             (_, _) =>
                 ClearStatus();
 
+        BackgroundColor =
+            Ui.Surface;
+
         Content =
             new StackLayout
             {
                 Padding =
                     new Padding(
-                        left: 12,
+                        left: 10,
                         top: 10,
-                        right: 12,
+                        right: 10,
                         bottom: 10),
 
-                Spacing = UiGap,
+                Spacing = 10,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch,
@@ -257,33 +210,20 @@ public sealed class ToolboxPanel : Panel
         _watchService.Start();
     }
 
-    private RoundedButton CreateHeaderIconButton(
+    private static RoundedButton CreateHeaderIconButton(
         string resourceName,
-        string tooltip,
-        int height)
+        string tooltip)
     {
         var button =
             new RoundedButton
             {
-                Width = height,
-                Height = height,
-
-                CornerRadius =
-                    Math.Max(
-                        6f,
-                        height * 0.22f),
-
+                Width = Ui.FieldHeight,
+                Height = Ui.FieldHeight,
+                CornerRadius = Ui.FieldRadius,
                 BorderWidth = 1f,
-
-                IconSize =
-                    Math.Min(
-                        HeaderIconDisplaySize,
-                        Math.Max(
-                            14,
-                            height - 10)),
-
+                IconSize = HeaderIconDisplaySize,
                 CenterContent = true,
-
+                CustomBackgroundColor = Ui.Surface,
                 ToolTip = tooltip
             };
 
@@ -292,6 +232,45 @@ public sealed class ToolboxPanel : Panel
                 resourceName);
 
         return button;
+    }
+
+    private void ShowAddMenu(
+        Control anchor)
+    {
+        var menu =
+            new ContextMenu();
+
+        var newItem =
+            new ButtonMenuItem
+            {
+                Text = "New Tool..."
+            };
+
+        newItem.Click +=
+            (_, _) =>
+                CreateNewTool();
+
+        menu.Items.Add(
+            newItem);
+
+        var importItem =
+            new ButtonMenuItem
+            {
+                Text = "Import Tool..."
+            };
+
+        importItem.Click +=
+            (_, _) =>
+                ImportTool();
+
+        menu.Items.Add(
+            importItem);
+
+        menu.Show(
+            anchor,
+            new PointF(
+                0,
+                anchor.Height));
     }
 
     private void ShowStatus(
@@ -388,6 +367,19 @@ public sealed class ToolboxPanel : Panel
 
         menu.Items.Add(
             new SeparatorMenuItem());
+
+        var refreshItem =
+            new ButtonMenuItem
+            {
+                Text = "Refresh"
+            };
+
+        refreshItem.Click +=
+            (_, _) =>
+                ReloadTools();
+
+        menu.Items.Add(
+            refreshItem);
 
         var openUserToolsFolderItem =
             new ButtonMenuItem
@@ -1369,7 +1361,7 @@ public sealed class ToolboxPanel : Panel
             return;
 
         AddCategorySection(
-            "★ Favorites",
+            "Favorites",
             favorites,
             FavoritesSectionKey,
             forceExpanded);
@@ -1381,9 +1373,12 @@ public sealed class ToolboxPanel : Panel
         string stateKey,
         bool forceExpanded = false)
     {
+        var toolList =
+            tools.ToList();
+
         var content =
             CreateCategoryContent(
-                tools);
+                toolList);
 
         var savedExpanded =
             !_categoryExpandedStates
@@ -1405,7 +1400,8 @@ public sealed class ToolboxPanel : Panel
             new CollapsibleCategoryPanel(
                 displayName,
                 content,
-                expanded);
+                expanded,
+                toolList.Count);
 
         if (TryParseUiColor(
                 _settingsService.GetCategoryColor(
@@ -1445,7 +1441,7 @@ public sealed class ToolboxPanel : Panel
                 Orientation =
                     Orientation.Vertical,
 
-                Spacing = 7,
+                Spacing = 0,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch
@@ -1454,10 +1450,11 @@ public sealed class ToolboxPanel : Panel
         foreach (var tool in
                  tools.OrderBy(
                      item =>
-                         item.Name))
+                         ToolDisplayName.For(item.Name),
+                     StringComparer.OrdinalIgnoreCase))
         {
             stack.Items.Add(
-                CreateToolButton(
+                CreateToolRow(
                     tool));
         }
 
@@ -1493,6 +1490,10 @@ public sealed class ToolboxPanel : Panel
                    query)
                ||
                Contains(
+                   ToolDisplayName.For(tool.Name),
+                   query)
+               ||
+               Contains(
                    tool.Category,
                    query)
                ||
@@ -1514,34 +1515,20 @@ public sealed class ToolboxPanel : Panel
                        .OrdinalIgnoreCase);
     }
 
-    private RoundedButton CreateToolButton(
+    private ToolRow CreateToolRow(
         ToolDefinition tool)
     {
-        var button =
-            new RoundedButton
+        var row =
+            new ToolRow
             {
                 Text =
-                    tool.Name,
+                    ToolDisplayName.For(
+                        tool.Name),
 
                 ToolTip =
-                    tool.Tooltip,
-
-                Height =
-                    ToolButtonHeight,
-
-                CornerRadius =
-                    ToolCornerRadius,
-
-                BorderWidth = 1f,
-
-                IconSize =
-                    ToolIconDisplaySize,
-
-                HorizontalPadding = 13,
-
-                IconTextSpacing = 10,
-
-                CenterContent = false
+                    string.IsNullOrWhiteSpace(tool.Tooltip)
+                        ? tool.Name
+                        : tool.Tooltip
             };
 
         if (TryParseUiColor(
@@ -1549,7 +1536,7 @@ public sealed class ToolboxPanel : Panel
                     tool.Id),
                 out var toolColor))
         {
-            button.CustomBackgroundColor =
+            row.FillColor =
                 toolColor;
         }
 
@@ -1557,11 +1544,14 @@ public sealed class ToolboxPanel : Panel
             GetIconPath(
                 tool);
 
-        if (iconPath is not null)
+        // The default icon is the same for every tool,
+        // so it is left out and the name lines up instead.
+        if (iconPath is not null
+            && !IsDefaultIcon(iconPath))
         {
             try
             {
-                button.Image =
+                row.Image =
                     LoadBitmapFresh(
                         iconPath);
             }
@@ -1576,16 +1566,56 @@ public sealed class ToolboxPanel : Panel
             }
         }
 
-        button.Click +=
+        row.Click +=
             (_, _) =>
                 _executionService.Run(
                     tool);
 
-        button.ContextMenu =
+        row.ContextMenu =
             CreateToolContextMenu(
                 tool);
 
-        return button;
+        return row;
+    }
+
+    private static byte[]? _defaultIconBytes;
+
+    private static bool IsDefaultIcon(
+        string iconPath)
+    {
+        try
+        {
+            if (_defaultIconBytes is null)
+            {
+                using var resource =
+                    typeof(ToolboxPanel).Assembly
+                        .GetManifestResourceStream(
+                            DefaultToolIconResource);
+
+                if (resource is null)
+                    return false;
+
+                using var buffer =
+                    new MemoryStream();
+
+                resource.CopyTo(buffer);
+
+                _defaultIconBytes =
+                    buffer.ToArray();
+            }
+
+            var info =
+                new FileInfo(iconPath);
+
+            return info.Length == _defaultIconBytes.Length
+                   && File.ReadAllBytes(iconPath)
+                       .AsSpan()
+                       .SequenceEqual(_defaultIconBytes);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void ShowEmptyState(
@@ -1596,9 +1626,8 @@ public sealed class ToolboxPanel : Panel
         if (_tools.Count == 0)
         {
             message =
-                "No tools were found.\n\n" +
-                "Use the New Tool button to import a " +
-                "Rhino 8 Python script.";
+                "No tools yet.\n\n" +
+                "Click + to add a tested Rhino 8 Python script.";
         }
         else
         {
@@ -1610,7 +1639,8 @@ public sealed class ToolboxPanel : Panel
             new Label
             {
                 Text = message,
-                Wrap = WrapMode.Word
+                Wrap = WrapMode.Word,
+                TextColor = Ui.Muted
             });
     }
 

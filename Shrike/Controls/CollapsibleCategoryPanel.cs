@@ -4,7 +4,8 @@ using Eto.Forms;
 namespace Shrike.Controls;
 
 /// <summary>
-/// Compact collapsible category section.
+/// A category in the panel: a plain text header with a thin chevron
+/// and the number of tools, above its tool rows.
 ///
 /// Outer margins are intentionally NOT defined here.
 /// ToolboxPanel owns the global spacing so all categories use
@@ -12,13 +13,9 @@ namespace Shrike.Controls;
 /// </summary>
 public sealed class CollapsibleCategoryPanel : Panel
 {
-    private readonly string _title;
+    private readonly CategoryHeader _header;
 
-    private readonly RoundedButton
-        _headerButton;
-
-    private readonly Panel
-        _contentHost;
+    private readonly Panel _contentHost;
 
     public event EventHandler?
         ExpandedChanged;
@@ -29,17 +26,16 @@ public sealed class CollapsibleCategoryPanel : Panel
         private set;
     }
 
-
     /// <summary>
     /// Right-click menu for the category header.
     /// </summary>
     public ContextMenu? HeaderContextMenu
     {
         get =>
-            _headerButton.ContextMenu;
+            _header.ContextMenu;
 
         set =>
-            _headerButton.ContextMenu = value;
+            _header.ContextMenu = value;
     }
 
     /// <summary>
@@ -48,57 +44,50 @@ public sealed class CollapsibleCategoryPanel : Panel
     public Color? HeaderBackgroundColor
     {
         get =>
-            _headerButton.CustomBackgroundColor;
+            _header.FillColor;
 
-        set =>
-            _headerButton.CustomBackgroundColor = value;
+        set
+        {
+            _header.FillColor = value;
+            _header.Invalidate();
+        }
     }
 
     public CollapsibleCategoryPanel(
         string title,
         Control categoryContent,
-        bool expanded = true)
+        bool expanded = true,
+        int toolCount = 0)
     {
-        _title = title;
         Expanded = expanded;
 
-        _headerButton =
-            new RoundedButton
+        _header =
+            new CategoryHeader(
+                title,
+                toolCount)
             {
-                Height = 28,
-
-                CornerRadius = 6f,
-
-                BorderWidth = 1f,
-
-                HorizontalPadding = 10,
-
-                CenterContent = false,
-
-                TextFont =
-                    SystemFonts.Bold(),
-
-                ToolTip =
-                    "Expand / collapse category"
+                Expanded = expanded
             };
 
-        _headerButton.Click +=
+        _header.Click +=
             (_, _) => Toggle();
 
         _contentHost =
             new Panel
             {
-                // Tool buttons are slightly inset relative
-                // to their category header.
+                // Tool names line up with the category title.
                 Padding =
                     new Padding(
-                        left: 10,
-                        top: 6,
-                        right: 10,
-                        bottom: 0),
+                        left: CategoryHeader.TitleLeft - 10,
+                        top: 2,
+                        right: 0,
+                        bottom: 6),
 
                 Content =
-                    categoryContent
+                    categoryContent,
+
+                Visible =
+                    expanded
             };
 
         Content =
@@ -107,8 +96,6 @@ public sealed class CollapsibleCategoryPanel : Panel
                 Orientation =
                     Orientation.Vertical,
 
-                Padding = 0,
-
                 Spacing = 0,
 
                 HorizontalContentAlignment =
@@ -116,12 +103,10 @@ public sealed class CollapsibleCategoryPanel : Panel
 
                 Items =
                 {
-                    _headerButton,
+                    _header,
                     _contentHost
                 }
             };
-
-        UpdateVisualState();
     }
 
     private void Toggle()
@@ -129,23 +114,157 @@ public sealed class CollapsibleCategoryPanel : Panel
         Expanded =
             !Expanded;
 
-        UpdateVisualState();
+        _header.Expanded =
+            Expanded;
+
+        _header.Invalidate();
+
+        _contentHost.Visible =
+            Expanded;
 
         ExpandedChanged?.Invoke(
             this,
             EventArgs.Empty);
     }
 
-    private void UpdateVisualState()
+    private sealed class CategoryHeader : Drawable
     {
-        _headerButton.Text =
-            Expanded
-                ? $"▼  {_title}"
-                : $"▶  {_title}";
+        public const int TitleLeft = 24;
 
-        _contentHost.Visible =
-            Expanded;
+        private readonly string _title;
 
-        Invalidate();
+        private readonly int _count;
+
+        private bool _hover;
+
+        public event EventHandler? Click;
+
+        public bool Expanded { get; set; }
+
+        public Color? FillColor { get; set; }
+
+        public CategoryHeader(
+            string title,
+            int count)
+        {
+            _title = title;
+            _count = count;
+            Height = 28;
+            Cursor = Cursors.Pointer;
+            BackgroundColor = Ui.Surface;
+        }
+
+        protected override void OnMouseEnter(
+            MouseEventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hover = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(
+            MouseEventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hover = false;
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(
+            MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+
+            if ((e.Buttons & MouseButtons.Primary) != 0)
+                Click?.Invoke(this, EventArgs.Empty);
+        }
+
+        protected override void OnPaint(
+            PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            var g = e.Graphics;
+            g.AntiAlias = true;
+
+            var baseFill =
+                FillColor ?? Ui.Surface;
+
+            var ink =
+                Ui.IsDark(baseFill)
+                    ? Colors.White
+                    : Ui.Ink;
+
+            Color? fill =
+                FillColor;
+
+            if (_hover)
+                fill = Color.Blend(baseFill, ink, 0.07f);
+
+            if (fill.HasValue)
+            {
+                Draw.Frame(
+                    g,
+                    new RectangleF(0, 0, Width, Height),
+                    4f,
+                    fill.Value,
+                    fill.Value);
+            }
+
+            DrawChevron(
+                g,
+                new PointF(12f, Height / 2f),
+                ink);
+
+            var titleFont = Ui.StrongFont;
+
+            var titleSize =
+                titleFont.MeasureString(_title);
+
+            var y =
+                (Height - titleSize.Height) / 2f;
+
+            g.DrawText(
+                titleFont,
+                ink,
+                TitleLeft,
+                y,
+                _title);
+
+            if (_count <= 0)
+                return;
+
+            g.DrawText(
+                Ui.BodyFont,
+                Color.Blend(baseFill, ink, 0.55f),
+                TitleLeft + titleSize.Width + 8f,
+                y,
+                _count.ToString());
+        }
+
+        /// <summary>
+        /// Points down when expanded and right when collapsed.
+        /// </summary>
+        private void DrawChevron(
+            Graphics g,
+            PointF c,
+            Color color)
+        {
+            using var pen =
+                new Pen(
+                    color,
+                    1.4f);
+
+            if (Expanded)
+            {
+                g.DrawLine(pen, c.X - 4f, c.Y - 2f, c.X, c.Y + 2f);
+                g.DrawLine(pen, c.X, c.Y + 2f, c.X + 4f, c.Y - 2f);
+            }
+            else
+            {
+                g.DrawLine(pen, c.X - 2f, c.Y - 4f, c.X + 2f, c.Y);
+                g.DrawLine(pen, c.X + 2f, c.Y, c.X - 2f, c.Y + 4f);
+            }
+        }
     }
 }
