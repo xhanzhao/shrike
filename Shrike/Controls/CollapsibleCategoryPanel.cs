@@ -4,14 +4,15 @@ using Eto.Forms;
 namespace Shrike.Controls;
 
 /// <summary>
-/// A category in the panel: a plain text header with a thin chevron
-/// and the number of tools, above its tool rows.
+/// A category in the panel: a rounded frame holding a bold header
+/// (thin chevron, title, number of tools) and, when expanded, its
+/// tool rows. The frame grows and shrinks with the section.
 ///
 /// Outer margins are intentionally NOT defined here.
 /// ToolboxPanel owns the global spacing so all categories use
 /// one consistent spacing system.
 /// </summary>
-public sealed class CollapsibleCategoryPanel : Panel
+public sealed class CollapsibleCategoryPanel : Drawable
 {
     private readonly CategoryHeader _header;
 
@@ -61,6 +62,11 @@ public sealed class CollapsibleCategoryPanel : Panel
     {
         Expanded = expanded;
 
+        // Room for the 1px frame, so the header's hover fill and the
+        // tool rows sit inside it.
+        Padding = new Padding(3);
+        BackgroundColor = Ui.Surface;
+
         _header =
             new CategoryHeader(
                 title,
@@ -79,9 +85,9 @@ public sealed class CollapsibleCategoryPanel : Panel
                 Padding =
                     new Padding(
                         left: CategoryHeader.TitleLeft - 10,
-                        top: 2,
+                        top: 0,
                         right: 0,
-                        bottom: 6),
+                        bottom: 3),
 
                 Content =
                     categoryContent,
@@ -122,9 +128,31 @@ public sealed class CollapsibleCategoryPanel : Panel
         _contentHost.Visible =
             Expanded;
 
+        Invalidate();
+
         ExpandedChanged?.Invoke(
             this,
             EventArgs.Empty);
+    }
+
+    protected override void OnPaint(
+        PaintEventArgs e)
+    {
+        base.OnPaint(e);
+
+        Draw.Frame(
+            e.Graphics,
+            new RectangleF(0, 0, Width, Height),
+            Ui.FieldRadius + 2f,
+            Ui.Rule,
+            Ui.Surface);
+    }
+
+    protected override void OnSizeChanged(
+        EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        Invalidate();
     }
 
     private sealed class CategoryHeader : Drawable

@@ -136,7 +136,7 @@ public sealed class ToolboxPanel : Panel
                 Orientation =
                     Orientation.Vertical,
 
-                Spacing = 2,
+                Spacing = 8,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch
