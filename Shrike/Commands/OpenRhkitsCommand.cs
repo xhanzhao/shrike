@@ -17,8 +17,7 @@ public sealed class OpenShrikeCommand : Command
 
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
-        // Fully qualified name avoids conflict with namespace Shrike.Panels.
-        Rhino.UI.Panels.OpenPanel(typeof(ToolboxPanel));
+        ShrikePlugin.ShowPanel();
         return Result.Success;
     }
 }
