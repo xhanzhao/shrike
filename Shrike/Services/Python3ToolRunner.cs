@@ -4,14 +4,18 @@ using Shrike.Models;
 namespace Shrike.Services;
 
 /// <summary>
-/// Rhino 8 Python 3 runner.
+/// Rhino 8 Python runner.
 ///
 /// Rhino 8's new scripting infrastructure is invoked through:
 ///
 ///     _-ScriptEditor _R "C:\path\to\script.py"
 ///
+/// Script Editor picks CPython 3 or IronPython 2 from the script's
+/// "#! python 3" / "#! python 2" directive, the same way it does
+/// when the script is run from the editor itself.
+///
 /// This intentionally does NOT use Rhino.Runtime.PythonScript.Create(),
-/// which is the legacy IronPython/Python 2 engine.
+/// which always runs the legacy IronPython/Python 2 engine.
 /// </summary>
 public sealed class Python3ToolRunner : IToolRunner
 {
@@ -44,6 +48,8 @@ public sealed class Python3ToolRunner : IToolRunner
             return false;
         }
 
+        RepairInjectedDirective(scriptPath);
+
         // A quoted path is required when folders contain spaces.
         // Double embedded quotes defensively.
         var safePath =
@@ -68,6 +74,35 @@ public sealed class Python3ToolRunner : IToolRunner
             RhinoApp.WriteLine(ex.ToString());
 
             return false;
+        }
+    }
+
+    // Tools imported by earlier Shrike versions may carry an added
+    // "#! python 3" above their own "#! python2" line.
+    private static void RepairInjectedDirective(
+        string scriptPath)
+    {
+        try
+        {
+            var source =
+                File.ReadAllText(scriptPath);
+
+            if (!PythonScriptHeader.TryRemoveInjectedDirective(
+                    source,
+                    out var repaired))
+            {
+                return;
+            }
+
+            File.WriteAllText(
+                scriptPath,
+                repaired,
+                new System.Text.UTF8Encoding(false));
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine(
+                $"Shrike: could not update the script header: {ex.Message}");
         }
     }
 }
