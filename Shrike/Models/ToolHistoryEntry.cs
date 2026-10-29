@@ -7,7 +7,6 @@ public enum ToolHistoryReason
 {
     Created,
     BeforeReplaceFromFile,
-    BeforeReplaceFromClipboard,
     BeforeRollback
 }
 
@@ -33,8 +32,6 @@ public sealed class ToolHistoryEntry
                 "Initial version",
             ToolHistoryReason.BeforeReplaceFromFile =>
                 "Before replace from file",
-            ToolHistoryReason.BeforeReplaceFromClipboard =>
-                "Before replace from clipboard",
             ToolHistoryReason.BeforeRollback =>
                 "Before rollback",
             _ =>

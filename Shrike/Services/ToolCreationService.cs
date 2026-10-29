@@ -46,11 +46,7 @@ public sealed class ToolCreationService
                 $"Unsupported tool type: {request.Type}");
         }
 
-        var hasSourceCode =
-            !string.IsNullOrWhiteSpace(
-                request.SourceCode);
-
-        if (type == "python3" && !hasSourceCode)
+        if (type == "python3")
         {
             if (string.IsNullOrWhiteSpace(
                     request.SourcePythonPath)
@@ -71,8 +67,7 @@ public sealed class ToolCreationService
                     "The source file must be a .py file.");
             }
         }
-        else if (type == "macro"
-                 && string.IsNullOrWhiteSpace(
+        else if (string.IsNullOrWhiteSpace(
                      request.Macro))
         {
             return ToolCreationResult.Fail(
@@ -137,18 +132,9 @@ public sealed class ToolCreationService
                         destination,
                         "main.py");
 
-                if (hasSourceCode)
-                {
-                    WritePython3Script(
-                        request.SourceCode,
-                        mainPyPath);
-                }
-                else
-                {
-                    CopyPython3Script(
-                        request.SourcePythonPath,
-                        mainPyPath);
-                }
+                CopyPython3Script(
+                    request.SourcePythonPath,
+                    mainPyPath);
 
                 manifest["entry"] = "main.py";
 
@@ -240,15 +226,9 @@ public sealed class ToolCreationService
         string sourcePath,
         string destinationPath)
     {
-        WritePython3Script(
-            File.ReadAllText(sourcePath),
-            destinationPath);
-    }
+        var source =
+            File.ReadAllText(sourcePath);
 
-    private static void WritePython3Script(
-        string source,
-        string destinationPath)
-    {
         var trimmedStart =
             source.TrimStart();
 

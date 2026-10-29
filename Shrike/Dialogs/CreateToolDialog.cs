@@ -1,7 +1,6 @@
 using Eto.Drawing;
 using Eto.Forms;
 using Shrike.Models;
-using Shrike.Services;
 
 namespace Shrike.Dialogs;
 
@@ -9,8 +8,6 @@ public sealed class CreateToolDialog : Dialog<bool>
 {
     private const int PythonDialogHeight = 350;
     private const int MacroDialogHeight = 400;
-
-    private const int CodePreviewHeight = 220;
 
     private const int PythonInputHeight = 28;
     private const int MacroInputHeight = 78;
@@ -50,21 +47,6 @@ public sealed class CreateToolDialog : Dialog<bool>
     private readonly Control
         _macroInputControl;
 
-    private readonly TextArea
-        _codePreviewTextArea;
-
-    private readonly Label
-        _codeWarningLabel;
-
-    private readonly TableRow
-        _codePreviewRow;
-
-    // Python source from the clipboard or a dropped file.
-    // When set it is used instead of the selected .py path.
-    private string
-        _sourceCode =
-            string.Empty;
-
     public bool RecordMacroRequested
     {
         get;
@@ -86,8 +68,7 @@ public sealed class CreateToolDialog : Dialog<bool>
         BuildRequest();
 
     public CreateToolDialog(
-        CreateToolRequest? initialRequest = null,
-        ClipboardCodeResult? initialCode = null)
+        CreateToolRequest? initialRequest = null)
     {
         Title = "Create New Tool";
         Width = 600;
@@ -185,35 +166,6 @@ public sealed class CreateToolDialog : Dialog<bool>
             (_, _) =>
                 RequestMacroRecording();
 
-        var pastePythonButton =
-            new Button
-            {
-                Text = "Paste",
-                Width = InputActionButtonWidth,
-                ToolTip =
-                    "Use Python code or a .py file from the clipboard"
-            };
-
-        pastePythonButton.Click +=
-            (_, _) =>
-                PasteFromClipboard();
-
-        _codePreviewTextArea =
-            new TextArea
-            {
-                ReadOnly = true,
-                Wrap = false,
-                Height = CodePreviewHeight,
-                Font = Fonts.Monospace(9)
-            };
-
-        _codeWarningLabel =
-            new Label
-            {
-                Wrap = WrapMode.Word,
-                Visible = false
-            };
-
         _pythonInputControl =
             new TableLayout
             {
@@ -228,10 +180,7 @@ public sealed class CreateToolDialog : Dialog<bool>
                             scaleWidth: true),
 
                         new TableCell(
-                            browsePythonButton),
-
-                        new TableCell(
-                            pastePythonButton))
+                            browsePythonButton))
                 }
             };
 
@@ -299,33 +248,6 @@ public sealed class CreateToolDialog : Dialog<bool>
                 }
             };
 
-        _codePreviewRow =
-            new TableRow(
-                new TableCell(
-                    new Label
-                    {
-                        Text = "Code"
-                    }),
-
-                new TableCell(
-                    new StackLayout
-                    {
-                        Orientation =
-                            Orientation.Vertical,
-
-                        Spacing = 6,
-
-                        HorizontalContentAlignment =
-                            HorizontalAlignment.Stretch,
-
-                        Items =
-                        {
-                            _codeWarningLabel,
-                            _codePreviewTextArea
-                        }
-                    },
-                    scaleWidth: true));
-
         var createButton =
             new Button
             {
@@ -382,8 +304,6 @@ public sealed class CreateToolDialog : Dialog<bool>
                             _typeInputHost,
                             scaleWidth: true)),
 
-                    _codePreviewRow,
-
                     CreateFormRow(
                         "Icon (.png)",
                         iconInput),
@@ -417,13 +337,6 @@ public sealed class CreateToolDialog : Dialog<bool>
 
         ApplyInitialRequest(
             initialRequest);
-
-        if (initialCode is not null)
-        {
-            ApplyCode(
-                initialCode,
-                fillFields: true);
-        }
 
         _typeDropDown.SelectedIndexChanged +=
             (_, _) =>
@@ -469,10 +382,7 @@ public sealed class CreateToolDialog : Dialog<bool>
                 _pythonInputControl;
 
             Height =
-                PythonDialogHeight
-                + (HasSourceCode
-                    ? CodePreviewHeight + 40
-                    : 0);
+                PythonDialogHeight;
         }
         else
         {
@@ -488,10 +398,6 @@ public sealed class CreateToolDialog : Dialog<bool>
             Height =
                 MacroDialogHeight;
         }
-
-        SetCodePreviewVisible(
-            isPython
-            && HasSourceCode);
 
         _typeInputHost.Invalidate();
         Invalidate();
@@ -541,149 +447,6 @@ public sealed class CreateToolDialog : Dialog<bool>
         _iconPathTextBox.Text =
             initialRequest.SourceIconPath
             ?? string.Empty;
-
-        // A draft can carry pasted code, for example when the user
-        // switches to macro recording and comes back.
-        if (!string.IsNullOrWhiteSpace(
-                initialRequest.SourceCode))
-        {
-            ApplyCode(
-                ClipboardCodeParser.Parse(
-                    initialRequest.SourceCode),
-                fillFields: false);
-        }
-    }
-
-    private bool HasSourceCode =>
-        !string.IsNullOrWhiteSpace(
-            _sourceCode);
-
-    private void PasteFromClipboard()
-    {
-        ClipboardCodeResult code;
-
-        try
-        {
-            code =
-                ClipboardSource.ReadCode();
-        }
-        catch (Exception ex)
-        {
-            ShowWarning(
-                "Shrike could not read the clipboard.\n\n" +
-                ex.Message);
-
-            return;
-        }
-
-        if (!code.HasCode)
-        {
-            ShowWarning(
-                "The clipboard does not contain any text " +
-                "or a .py file.");
-
-            return;
-        }
-
-        ApplyCode(
-            code,
-            fillFields: true);
-    }
-
-    private void ApplyCode(
-        ClipboardCodeResult code,
-        bool fillFields)
-    {
-        if (!code.HasCode)
-            return;
-
-        _typeDropDown.SelectedIndex = 0;
-
-        _sourceCode =
-            code.Code;
-
-        _pythonPathTextBox.Text =
-            code.Summary;
-
-        _codePreviewTextArea.Text =
-            code.Code;
-
-        _codeWarningLabel.Text =
-            string.Join(
-                "\n",
-                code.Warnings);
-
-        _codeWarningLabel.Visible =
-            code.Warnings.Count > 0;
-
-        if (fillFields)
-        {
-            FillIfEmpty(
-                _nameTextBox,
-                code.SuggestedName);
-
-            if (!string.IsNullOrWhiteSpace(
-                    code.SuggestedCategory))
-            {
-                _categoryTextBox.Text =
-                    code.SuggestedCategory;
-            }
-
-            if (string.IsNullOrWhiteSpace(
-                    _tooltipTextArea.Text)
-                &&
-                !string.IsNullOrWhiteSpace(
-                    code.SuggestedTooltip))
-            {
-                _tooltipTextArea.Text =
-                    code.SuggestedTooltip;
-            }
-        }
-
-        UpdateToolTypeUi();
-    }
-
-    private void ClearSourceCode()
-    {
-        _sourceCode =
-            string.Empty;
-
-        _codePreviewTextArea.Text =
-            string.Empty;
-
-        _codeWarningLabel.Visible =
-            false;
-
-        UpdateToolTypeUi();
-    }
-
-    private void SetCodePreviewVisible(
-        bool visible)
-    {
-        foreach (var cell in
-                 _codePreviewRow.Cells)
-        {
-            if (cell.Control is not null)
-            {
-                cell.Control.Visible =
-                    visible;
-            }
-        }
-    }
-
-    private static void FillIfEmpty(
-        TextBox textBox,
-        string value)
-    {
-        if (string.IsNullOrWhiteSpace(
-                textBox.Text)
-            &&
-            !string.IsNullOrWhiteSpace(
-                value))
-        {
-            textBox.Text =
-                value;
-        }
     }
 
     private CreateToolRequest BuildRequest()
@@ -708,14 +471,9 @@ public sealed class CreateToolDialog : Dialog<bool>
                 SelectedToolType,
 
             SourcePythonPath =
-                HasSourceCode
-                    ? string.Empty
-                    : (_pythonPathTextBox.Text
-                       ?? string.Empty)
-                    .Trim(),
-
-            SourceCode =
-                _sourceCode,
+                (_pythonPathTextBox.Text
+                 ?? string.Empty)
+                .Trim(),
 
             Macro =
                 (_macroTextArea.Text
@@ -775,8 +533,6 @@ public sealed class CreateToolDialog : Dialog<bool>
         {
             return;
         }
-
-        ClearSourceCode();
 
         _pythonPathTextBox.Text =
             dialog.FileName;
@@ -871,16 +627,14 @@ public sealed class CreateToolDialog : Dialog<bool>
                 "python3",
                 StringComparison.OrdinalIgnoreCase))
         {
-            if (!HasSourceCode
-                &&
-                (string.IsNullOrWhiteSpace(
-                     pythonPath)
-                 ||
-                 !File.Exists(
-                     pythonPath)))
+            if (string.IsNullOrWhiteSpace(
+                    pythonPath)
+                ||
+                !File.Exists(
+                    pythonPath))
             {
                 ShowWarning(
-                    "Select a .py file or paste Python code.");
+                    "Select a valid .py file.");
 
                 return;
             }
