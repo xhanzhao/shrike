@@ -1,16 +1,14 @@
-using Eto.Drawing;
 using Eto.Forms;
+using Shrike.Controls;
 
 namespace Shrike.Dialogs;
 
 /// <summary>
-/// Reusable dialog for renaming a category or creating a category
-/// while moving a tool.
+/// Asks for a category name, e.g. when renaming a category.
 /// </summary>
-public sealed class CategoryNameDialog : Dialog<bool>
+public sealed class CategoryNameDialog : ShrikeDialog
 {
-    private readonly TextBox
-        _categoryTextBox;
+    private readonly TextBox _categoryTextBox;
 
     public string CategoryName =>
         (_categoryTextBox.Text
@@ -18,71 +16,34 @@ public sealed class CategoryNameDialog : Dialog<bool>
         .Trim();
 
     public CategoryNameDialog(
-        string title,
+        string heading,
+        string description,
         string initialName,
         string actionText)
+        : base(
+            heading,
+            description,
+            bodyWidth: 360)
     {
-        Title = title;
-        Width = 420;
-        Resizable = false;
-
         _categoryTextBox =
-            new TextBox
-            {
-                Text =
-                    initialName
-                    ?? string.Empty
-            };
+            Ui.TextBox(
+                initialName);
 
-        var actionButton =
-            new Button
-            {
-                Text =
-                    actionText
-            };
+        SetBody(
+            Ui.Field(
+                "Category name",
+                new FieldFrame(
+                    _categoryTextBox)));
 
-        actionButton.Click +=
-            (_, _) =>
-                TryAccept();
+        AddCancelButton();
 
-        var cancelButton =
-            new Button
-            {
-                Text = "Cancel"
-            };
+        AddButton(
+            actionText,
+            TryAccept,
+            primary: true);
 
-        cancelButton.Click +=
-            (_, _) =>
-                Close(false);
-
-        DefaultButton =
-            actionButton;
-
-        AbortButton =
-            cancelButton;
-
-        var layout =
-            new DynamicLayout
-            {
-                Padding = 12,
-                Spacing =
-                    new Size(8, 8)
-            };
-
-        layout.AddRow(
-            new Label
-            {
-                Text = "Category name"
-            },
-            _categoryTextBox);
-
-        layout.AddSeparateRow(
-            null,
-            actionButton,
-            cancelButton);
-
-        Content =
-            layout;
+        InitialFocus =
+            _categoryTextBox;
     }
 
     private void TryAccept()
@@ -90,11 +51,8 @@ public sealed class CategoryNameDialog : Dialog<bool>
         if (string.IsNullOrWhiteSpace(
                 CategoryName))
         {
-            MessageBox.Show(
-                "Category name cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Type a category name.");
 
             return;
         }

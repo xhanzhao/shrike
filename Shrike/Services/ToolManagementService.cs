@@ -527,6 +527,32 @@ public sealed class ToolManagementService
         }
     }
 
+    public bool ChangeTooltip(
+        ToolDefinition tool,
+        string newTooltip,
+        out string error)
+    {
+        error = string.Empty;
+
+        if (!CanModify(tool))
+        {
+            error = "Bundled tools cannot be modified.";
+            return false;
+        }
+
+        try
+        {
+            tool.Tooltip = (newTooltip ?? string.Empty).Trim();
+            SaveManifest(tool);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
     public bool ChangeIcon(
         ToolDefinition tool,
         string sourceIconPath,

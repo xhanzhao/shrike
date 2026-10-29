@@ -13,28 +13,23 @@ namespace Shrike.Panels;
 [Guid("89C2BD00-F9C5-4D03-8229-A24E6A54026B")]
 public sealed class ToolboxPanel : Panel
 {
-    private const int UiGap = 5;
-
-    private const int ToolButtonHeight = 30;
-    private const float ToolCornerRadius = 9f;
-    private const int ToolIconDisplaySize = 18;
 
     private const int HeaderIconDisplaySize = 18;
 
     private const string NewToolIconResource =
         "Shrike.Resources.NewToolIcon.png";
 
-    private const string ImportToolIconResource =
-        "Shrike.Resources.ImportToolIcon.png";
-
     private const string PanelOptionsIconResource =
         "Shrike.Resources.PanelOptionsIcon.png";
 
-    private const string RefreshIconResource =
-        "Shrike.Resources.RefreshIcon.png";
+    private const string DefaultToolIconResource =
+        "Shrike.Resources.DefaultToolIcon.png";
 
     private const string FavoritesSectionKey =
         "__Shrike_favorites__";
+
+    private static readonly TimeSpan StatusDisplayTime =
+        TimeSpan.FromSeconds(6);
 
     private readonly ToolRepository _repository;
     private readonly ToolExecutionService _executionService;
@@ -46,6 +41,8 @@ public sealed class ToolboxPanel : Panel
 
     private readonly TextBox _searchBox;
     private readonly StackLayout _toolList;
+    private readonly Label _statusLabel;
+    private readonly UITimer _statusTimer;
 
     private readonly Dictionary<string, bool>
         _categoryExpandedStates =
@@ -83,89 +80,53 @@ public sealed class ToolboxPanel : Panel
             OnWatchedToolsChanged;
 
         _searchBox =
-            new TextBox
-            {
-                PlaceholderText =
-                    "Search tools..."
-            };
+            Ui.TextBox(
+                placeholder:
+                    "Search tools");
 
         _searchBox.TextChanged +=
             (_, _) =>
                 RebuildToolList();
 
-        var searchPreferredHeight =
-            (int)Math.Ceiling(
-                _searchBox
-                    .GetPreferredSize()
-                    .Height);
+        var addButton =
+            CreateHeaderIconButton(
+                NewToolIconResource,
+                "New or import a tool");
 
-        var headerControlHeight =
-            searchPreferredHeight > 0
-                ? searchPreferredHeight
-                : 30;
+        addButton.Click +=
+            (_, _) =>
+                ShowAddMenu(
+                    addButton);
 
         var managementButton =
             CreateHeaderIconButton(
                 PanelOptionsIconResource,
-                "Panel Options",
-                headerControlHeight);
+                "Panel options");
 
         managementButton.Click +=
             (_, _) =>
                 ShowPanelManagementMenu(
                     managementButton);
 
-        var createButton =
-            CreateHeaderIconButton(
-                NewToolIconResource,
-                "New Tool",
-                headerControlHeight);
-
-        createButton.Click +=
-            (_, _) =>
-                CreateNewTool();
-
-        var importButton =
-            CreateHeaderIconButton(
-                ImportToolIconResource,
-                "Import Tool",
-                headerControlHeight);
-
-        importButton.Click +=
-            (_, _) =>
-                ImportTool();
-
-        var refreshButton =
-            CreateHeaderIconButton(
-                RefreshIconResource,
-                "Refresh",
-                headerControlHeight);
-
-        refreshButton.Click +=
-            (_, _) =>
-                ReloadTools();
-
         var header =
-            new StackLayout
+            new TableLayout
             {
-                Orientation =
-                    Orientation.Horizontal,
+                Spacing =
+                    new Size(Ui.Gap, 0),
 
-                Spacing = 8,
-
-                VerticalContentAlignment =
-                    VerticalAlignment.Center,
-
-                Items =
+                Rows =
                 {
-                    new StackLayoutItem(
-                        _searchBox,
-                        expand: true),
+                    new TableRow(
+                        new TableCell(
+                            new FieldFrame(
+                                _searchBox),
+                            scaleWidth: true),
 
-                    managementButton,
-                    createButton,
-                    importButton,
-                    refreshButton
+                        new TableCell(
+                            addButton),
+
+                        new TableCell(
+                            managementButton))
                 }
             };
 
@@ -175,40 +136,59 @@ public sealed class ToolboxPanel : Panel
                 Orientation =
                     Orientation.Vertical,
 
-                Spacing = UiGap,
+                Spacing = 8,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch
             };
 
-        var toolListHost =
-            new Panel
-            {
-                Padding =
-                    new Padding(UiGap),
-
-                Content =
-                    _toolList
-            };
-
+        // No frame around the list: the categories and rows
+        // sit directly on the panel.
         var scrollable =
             new Scrollable
             {
+                Border = BorderType.None,
                 ExpandContentWidth = true,
-                Content = toolListHost
+                BackgroundColor = Ui.Surface,
+                Content = _toolList
             };
+
+        // Results of quick actions are shown here instead of
+        // in a message box, so the panel never blocks for an "OK".
+        _statusLabel =
+            new Label
+            {
+                Wrap = WrapMode.Word,
+                TextColor =
+                    SystemColors.DisabledText,
+                Visible = false
+            };
+
+        _statusTimer =
+            new UITimer
+            {
+                Interval =
+                    StatusDisplayTime.TotalSeconds
+            };
+
+        _statusTimer.Elapsed +=
+            (_, _) =>
+                ClearStatus();
+
+        BackgroundColor =
+            Ui.Surface;
 
         Content =
             new StackLayout
             {
                 Padding =
                     new Padding(
-                        left: 12,
+                        left: 10,
                         top: 10,
-                        right: 12,
+                        right: 10,
                         bottom: 10),
 
-                Spacing = UiGap,
+                Spacing = 10,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch,
@@ -219,7 +199,9 @@ public sealed class ToolboxPanel : Panel
 
                     new StackLayoutItem(
                         scrollable,
-                        expand: true)
+                        expand: true),
+
+                    _statusLabel
                 }
             };
 
@@ -228,33 +210,20 @@ public sealed class ToolboxPanel : Panel
         _watchService.Start();
     }
 
-    private RoundedButton CreateHeaderIconButton(
+    private static RoundedButton CreateHeaderIconButton(
         string resourceName,
-        string tooltip,
-        int height)
+        string tooltip)
     {
         var button =
             new RoundedButton
             {
-                Width = height,
-                Height = height,
-
-                CornerRadius =
-                    Math.Max(
-                        6f,
-                        height * 0.22f),
-
+                Width = Ui.FieldHeight,
+                Height = Ui.FieldHeight,
+                CornerRadius = Ui.FieldRadius,
                 BorderWidth = 1f,
-
-                IconSize =
-                    Math.Min(
-                        HeaderIconDisplaySize,
-                        Math.Max(
-                            14,
-                            height - 10)),
-
+                IconSize = HeaderIconDisplaySize,
                 CenterContent = true,
-
+                CustomBackgroundColor = Ui.Surface,
                 ToolTip = tooltip
             };
 
@@ -265,67 +234,114 @@ public sealed class ToolboxPanel : Panel
         return button;
     }
 
+    private void ShowAddMenu(
+        Control anchor)
+    {
+        var menu =
+            new MenuPopup();
+
+        menu.Add(
+            "New Tool...",
+            CreateNewTool);
+
+        menu.Add(
+            "Import Tool...",
+            ImportTool);
+
+        menu.ShowBelow(
+            anchor);
+    }
+
+    private void ShowStatus(
+        string message)
+    {
+        _statusTimer.Stop();
+
+        _statusLabel.Text =
+            message;
+
+        _statusLabel.Visible = true;
+
+        _statusTimer.Start();
+    }
+
+    private void ClearStatus()
+    {
+        _statusTimer.Stop();
+
+        _statusLabel.Text =
+            string.Empty;
+
+        _statusLabel.Visible = false;
+    }
+
+    private IEnumerable<string> GetCategories()
+    {
+        return _tools
+            .Select(
+                tool =>
+                    tool.Category)
+            .Where(
+                category =>
+                    !string.IsNullOrWhiteSpace(
+                        category))
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Makes sure a tool that was just added or moved is visible.
+    /// </summary>
+    private void RevealCategory(
+        string category)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                category))
+        {
+            _categoryExpandedStates[
+                category] =
+                true;
+        }
+    }
+
     private void ShowPanelManagementMenu(
         Control anchor)
     {
+        // Expanding and collapsing do nothing while searching:
+        // every category with a match is shown open.
         var isSearching =
             !string.IsNullOrWhiteSpace(
                 _searchBox.Text);
 
         var menu =
-            new ContextMenu();
+            new MenuPopup();
 
-        var expandAllItem =
-            new ButtonMenuItem
-            {
-                Text = "Expand All",
-                Enabled = !isSearching
-            };
-
-        expandAllItem.Click +=
-            (_, _) =>
+        menu.Add(
+            "Expand All",
+            () =>
                 SetAllCategoriesExpanded(
-                    true);
+                    true),
+            enabled: !isSearching);
 
-        menu.Items.Add(
-            expandAllItem);
-
-        var collapseAllItem =
-            new ButtonMenuItem
-            {
-                Text = "Collapse All",
-                Enabled = !isSearching
-            };
-
-        collapseAllItem.Click +=
-            (_, _) =>
+        menu.Add(
+            "Collapse All",
+            () =>
                 SetAllCategoriesExpanded(
-                    false);
+                    false),
+            enabled: !isSearching);
 
-        menu.Items.Add(
-            collapseAllItem);
+        menu.AddSeparator();
 
-        menu.Items.Add(
-            new SeparatorMenuItem());
+        menu.Add(
+            "Refresh",
+            ReloadTools);
 
-        var openUserToolsFolderItem =
-            new ButtonMenuItem
-            {
-                Text = "Open User Tools Folder"
-            };
+        menu.Add(
+            "Open User Tools Folder",
+            OpenUserToolsFolder);
 
-        openUserToolsFolderItem.Click +=
-            (_, _) =>
-                OpenUserToolsFolder();
-
-        menu.Items.Add(
-            openUserToolsFolderItem);
-
-        menu.Show(
-            anchor,
-            new PointF(
-                0,
-                anchor.Height));
+        menu.ShowBelow(
+            anchor);
     }
 
     private void SetAllCategoriesExpanded(
@@ -411,7 +427,8 @@ public sealed class ToolboxPanel : Panel
     private void CreateNewTool()
     {
         var dialog =
-            new CreateToolDialog();
+            new CreateToolDialog(
+                GetCategories());
 
         var accepted =
             ShowDialog(dialog);
@@ -435,15 +452,13 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
+        RevealCategory(
+            dialog.Request.Category);
+
         ReloadTools();
 
-        MessageBox.Show(
-            result.Message +
-            "\n\nCreated in:\n" +
-            result.ToolDirectory,
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
+        ShowStatus(
+            $"Created \"{dialog.Request.Name}\" in {dialog.Request.Category}.");
     }
 
     private void ImportTool()
@@ -483,7 +498,8 @@ public sealed class ToolboxPanel : Panel
 
         var importDialog =
             new ImportToolDialog(
-                packageInfo!);
+                packageInfo!,
+                GetCategories());
 
         var accepted =
             ShowDialog(importDialog);
@@ -505,15 +521,13 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
+        RevealCategory(
+            importDialog.Category);
+
         ReloadTools();
 
-        MessageBox.Show(
-            result.Message +
-            "\n\nImported to:\n" +
-            result.ToolDirectory,
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
+        ShowStatus(
+            $"Imported \"{importDialog.ToolName}\" into {importDialog.Category}.");
     }
 
     private void ExportTool(
@@ -569,11 +583,8 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
-        MessageBox.Show(
-            $"Exported \"{tool.Name}\" to:\n\n{destination}",
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
+        ShowStatus(
+            $"Exported \"{tool.Name}\" to {destination}");
     }
 
     private void EditToolScript(
@@ -629,21 +640,8 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
-        var confirmation =
-            MessageBox.Show(
-                $"Replace the current script for \"{tool.Name}\"?\n\n" +
-                "The current script is saved to Version History, " +
-                "so you can roll back.",
-                "Replace Script",
-                MessageBoxButtons.YesNo,
-                MessageBoxType.Warning);
-
-        if (confirmation !=
-            DialogResult.Yes)
-        {
-            return;
-        }
-
+        // No confirmation: the current script is saved to
+        // Version History first, so a replace can be rolled back.
         if (!_managementService.ReplaceScript(
                 tool,
                 dialog.FileName,
@@ -653,26 +651,128 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
-        MessageBox.Show(
-            $"Replaced script for \"{tool.Name}\".",
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
+        ShowStatus(
+            $"Replaced the script of \"{tool.Name}\". " +
+            "The previous version is in Version History.");
     }
 
-    private void ShowVersionHistory(
+    private void ShowToolProperties(
         ToolDefinition tool)
     {
-        if (!IsPythonTool(tool))
-            return;
-
         var dialog =
-            new ToolHistoryDialog(
+            new ToolPropertiesDialog(
                 tool,
-                _managementService.History,
-                _managementService);
+                GetCategories(),
+                _managementService,
+                GetIconPath(
+                    tool),
+                _settingsService.GetToolColor(
+                    tool.Id));
 
-        ShowDialog(dialog);
+        var saved =
+            ShowDialog(dialog);
+
+        if (!saved)
+        {
+            if (dialog.ScriptRolledBack)
+            {
+                ShowStatus(
+                    $"Rolled back the script of \"{tool.Name}\".");
+            }
+
+            return;
+        }
+
+        if (dialog.ColorChanged)
+        {
+            _settingsService.SetToolColor(
+                tool.Id,
+                dialog.NewColorHex);
+        }
+
+        if (!_managementService.CanModify(
+                tool))
+        {
+            RebuildToolList();
+            return;
+        }
+
+        if (!ApplyToolProperties(
+                tool,
+                dialog,
+                out var error))
+        {
+            ShowError(error);
+            ReloadTools();
+            return;
+        }
+
+        RevealCategory(
+            tool.Category);
+
+        ReloadTools();
+
+        ShowStatus(
+            $"Saved \"{tool.Name}\".");
+    }
+
+    private bool ApplyToolProperties(
+        ToolDefinition tool,
+        ToolPropertiesDialog dialog,
+        out string error)
+    {
+        error = string.Empty;
+
+        if (dialog.NewName != tool.Name
+            && !_managementService.RenameTool(
+                tool,
+                dialog.NewName,
+                out error))
+        {
+            return false;
+        }
+
+        if (dialog.NewTooltip != (tool.Tooltip ?? string.Empty).Trim()
+            && !_managementService.ChangeTooltip(
+                tool,
+                dialog.NewTooltip,
+                out error))
+        {
+            return false;
+        }
+
+        if (dialog.NewIconPath is not null
+            && !_managementService.ChangeIcon(
+                tool,
+                dialog.NewIconPath,
+                out error))
+        {
+            return false;
+        }
+
+        if (dialog.NewScriptPath is not null
+            && !_managementService.ReplaceScript(
+                tool,
+                dialog.NewScriptPath,
+                out error))
+        {
+            return false;
+        }
+
+        // Moving changes the tool folder, so it goes last.
+        if (!string.Equals(
+                dialog.NewCategory,
+                tool.Category,
+                StringComparison.Ordinal)
+            && !_managementService.MoveToolToCategory(
+                tool,
+                dialog.NewCategory,
+                out error))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private void DuplicateTool(
@@ -680,7 +780,8 @@ public sealed class ToolboxPanel : Panel
     {
         var dialog =
             new DuplicateToolDialog(
-                tool);
+                tool,
+                GetCategories());
 
         var accepted =
             ShowDialog(dialog);
@@ -702,74 +803,13 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
-        ReloadTools();
-
-        MessageBox.Show(
-            result.Message +
-            "\n\nCreated in:\n" +
-            result.ToolDirectory,
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
-    }
-
-
-    private void MoveToolToCategory(
-        ToolDefinition tool,
-        string category)
-    {
-        if (!_managementService.CanModify(
-                tool))
-        {
-            ShowReadOnlyMessage();
-            return;
-        }
-
-        if (string.Equals(
-                tool.Category,
-                category,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (!_managementService.MoveToolToCategory(
-                tool,
-                category,
-                out var error))
-        {
-            ShowError(error);
-            return;
-        }
+        RevealCategory(
+            dialog.Category);
 
         ReloadTools();
-    }
 
-    private void MoveToolToNewCategory(
-        ToolDefinition tool)
-    {
-        if (!_managementService.CanModify(
-                tool))
-        {
-            ShowReadOnlyMessage();
-            return;
-        }
-
-        var dialog =
-            new CategoryNameDialog(
-                "New Category",
-                string.Empty,
-                "Move");
-
-        var accepted =
-            ShowDialog(dialog);
-
-        if (!accepted)
-            return;
-
-        MoveToolToCategory(
-            tool,
-            dialog.CategoryName);
+        ShowStatus(
+            $"Created \"{dialog.NewName}\" in {dialog.Category}.");
     }
 
     private void RenameCategory(
@@ -794,7 +834,8 @@ public sealed class ToolboxPanel : Panel
 
         var dialog =
             new CategoryNameDialog(
-                "Rename Category",
+                "Rename category",
+                "Every tool in this category moves to the new name.",
                 categoryName,
                 "Rename");
 
@@ -857,97 +898,12 @@ public sealed class ToolboxPanel : Panel
         ReloadTools();
     }
 
-    private ButtonMenuItem CreateMoveToCategoryMenu(
-        ToolDefinition tool)
-    {
-        var canModify =
-            _managementService.CanModify(
-                tool);
-
-        var moveMenu =
-            new ButtonMenuItem
-            {
-                Text = "Move to Category",
-                Enabled = canModify
-            };
-
-        if (!canModify)
-            return moveMenu;
-
-        var existingCategories =
-            _tools
-                .Select(
-                    item =>
-                        item.Category)
-                .Where(
-                    category =>
-                        !string.IsNullOrWhiteSpace(
-                            category))
-                .Distinct(
-                    StringComparer.OrdinalIgnoreCase)
-                .Where(
-                    category =>
-                        !string.Equals(
-                            category,
-                            tool.Category,
-                            StringComparison.OrdinalIgnoreCase))
-                .OrderBy(
-                    category =>
-                        category)
-                .ToList();
-
-        foreach (var category in
-                 existingCategories)
-        {
-            var targetCategory =
-                category;
-
-            var categoryItem =
-                new ButtonMenuItem
-                {
-                    Text =
-                        targetCategory
-                };
-
-            categoryItem.Click +=
-                (_, _) =>
-                    MoveToolToCategory(
-                        tool,
-                        targetCategory);
-
-            moveMenu.Items.Add(
-                categoryItem);
-        }
-
-        if (existingCategories.Count > 0)
-        {
-            moveMenu.Items.Add(
-                new SeparatorMenuItem());
-        }
-
-        var newCategoryItem =
-            new ButtonMenuItem
-            {
-                Text = "New Category..."
-            };
-
-        newCategoryItem.Click +=
-            (_, _) =>
-                MoveToolToNewCategory(
-                    tool);
-
-        moveMenu.Items.Add(
-            newCategoryItem);
-
-        return moveMenu;
-    }
-
-    private ContextMenu CreateCategoryContextMenu(
+    private MenuPopup BuildCategoryMenu(
         string displayName,
         string categoryKey)
     {
         var menu =
-            new ContextMenu();
+            new MenuPopup();
 
         var isFavorites =
             string.Equals(
@@ -967,31 +923,64 @@ public sealed class ToolboxPanel : Panel
                                 StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-            var renameItem =
-                new ButtonMenuItem
-                {
-                    Text = "Rename Category",
-
-                    Enabled =
-                        _managementService.CanRenameCategory(
-                            categoryTools)
-                };
-
-            renameItem.Click +=
-                (_, _) =>
+            menu.Add(
+                "Rename Category...",
+                () =>
                     RenameCategory(
-                        displayName);
+                        displayName),
+                _managementService.CanRenameCategory(
+                    categoryTools));
 
-            menu.Items.Add(
-                renameItem);
-
-            menu.Items.Add(
-                new SeparatorMenuItem());
+            menu.AddSeparator();
         }
 
-        menu.Items.Add(
-            CreateCategoryColorMenu(
-                categoryKey));
+        // The header colors, flat in the menu instead of a submenu.
+        // The current one is checked and each shows its gray.
+        var currentColor =
+            _settingsService.GetCategoryColor(
+                categoryKey);
+
+        void ApplyColor(
+            string? colorHex)
+        {
+            _settingsService.SetCategoryColor(
+                categoryKey,
+                colorHex);
+
+            RebuildToolList();
+        }
+
+        menu.AddHeading(
+            "Header color");
+
+        menu.Add(
+            "No color",
+            () =>
+                ApplyColor(null),
+            isChecked:
+                string.IsNullOrWhiteSpace(
+                    currentColor));
+
+        foreach (var preset in
+                 UserSettingsService.ColorPresets)
+        {
+            var colorHex =
+                preset.Hex;
+
+            menu.Add(
+                preset.Name,
+                () =>
+                    ApplyColor(
+                        colorHex),
+                isChecked:
+                    string.Equals(
+                        colorHex,
+                        currentColor,
+                        StringComparison.OrdinalIgnoreCase),
+                swatch:
+                    Color.Parse(
+                        colorHex));
+        }
 
         return menu;
     }
@@ -1003,85 +992,6 @@ public sealed class ToolboxPanel : Panel
             tool.Id);
 
         RebuildToolList();
-    }
-
-    private void RenameTool(
-        ToolDefinition tool)
-    {
-        if (!_managementService.CanModify(tool))
-        {
-            ShowReadOnlyMessage();
-            return;
-        }
-
-        var dialog =
-            new RenameToolDialog(
-                tool.Name);
-
-        var accepted =
-            ShowDialog(dialog);
-
-        if (!accepted)
-            return;
-
-        if (!_managementService.RenameTool(
-                tool,
-                dialog.NewName,
-                out var error))
-        {
-            ShowError(error);
-            return;
-        }
-
-        ReloadTools();
-    }
-
-    private void ChangeToolIcon(
-        ToolDefinition tool)
-    {
-        if (!_managementService.CanModify(tool))
-        {
-            ShowReadOnlyMessage();
-            return;
-        }
-
-        var dialog =
-            new Eto.Forms.OpenFileDialog
-            {
-                Title =
-                    "Select Tool Icon",
-
-                CheckFileExists = true,
-
-                MultiSelect = false,
-
-                Filters =
-                {
-                    new FileFilter(
-                        "PNG Image",
-                        "*.png")
-                }
-            };
-
-        var result =
-            dialog.ShowDialog(this);
-
-        if (result ==
-            Eto.Forms.DialogResult.Cancel)
-        {
-            return;
-        }
-
-        if (!_managementService.ChangeIcon(
-                tool,
-                dialog.FileName,
-                out var error))
-        {
-            ShowError(error);
-            return;
-        }
-
-        ReloadTools();
     }
 
     private void OpenToolFolder(
@@ -1138,308 +1048,83 @@ public sealed class ToolboxPanel : Panel
         ReloadTools();
     }
 
-    private ContextMenu CreateToolContextMenu(
+    private MenuPopup BuildToolMenu(
         ToolDefinition tool)
     {
         var menu =
-            new ContextMenu();
-
-        var runItem =
-            new ButtonMenuItem
-            {
-                Text = "Run"
-            };
-
-        runItem.Click +=
-            (_, _) =>
-                _executionService.Run(
-                    tool);
-
-        menu.Items.Add(
-            runItem);
-
-        if (IsPythonTool(tool))
-        {
-            var editItem =
-                new ButtonMenuItem
-                {
-                    Text = "Edit Script"
-                };
-
-            editItem.Click +=
-                (_, _) =>
-                    EditToolScript(tool);
-
-            menu.Items.Add(editItem);
-
-            var replaceScriptItem =
-                new ButtonMenuItem
-                {
-                    Text = "Replace Script",
-                    Enabled =
-                        _managementService.CanModify(tool)
-                };
-
-            replaceScriptItem.Click +=
-                (_, _) =>
-                    ReplaceToolScript(tool);
-
-            menu.Items.Add(replaceScriptItem);
-
-            var historyItem =
-                new ButtonMenuItem
-                {
-                    Text = "Version History...",
-                    Enabled =
-                        _managementService.CanModify(tool)
-                };
-
-            historyItem.Click +=
-                (_, _) =>
-                    ShowVersionHistory(tool);
-
-            menu.Items.Add(historyItem);
-        }
-
-        var openFolderItem =
-            new ButtonMenuItem
-            {
-                Text = "Open Folder"
-            };
-
-        openFolderItem.Click +=
-            (_, _) =>
-                OpenToolFolder(
-                    tool);
-
-        menu.Items.Add(
-            openFolderItem);
-
-        menu.Items.Add(
-            new SeparatorMenuItem());
-
-        var isFavorite =
-            _settingsService.IsFavorite(
-                tool.Id);
-
-        var favoriteItem =
-            new ButtonMenuItem
-            {
-                Text =
-                    isFavorite
-                        ? "Unpin from Favorites"
-                        : "Pin to Favorites"
-            };
-
-        favoriteItem.Click +=
-            (_, _) =>
-                ToggleFavorite(
-                    tool);
-
-        menu.Items.Add(
-            favoriteItem);
-
-        var duplicateItem =
-            new ButtonMenuItem
-            {
-                Text = "Duplicate"
-            };
-
-        duplicateItem.Click +=
-            (_, _) =>
-                DuplicateTool(
-                    tool);
-
-        menu.Items.Add(
-            duplicateItem);
-
-        var exportItem =
-            new ButtonMenuItem
-            {
-                Text = "Export Tool..."
-            };
-
-        exportItem.Click +=
-            (_, _) =>
-                ExportTool(
-                    tool);
-
-        menu.Items.Add(
-            exportItem);
-
-        var moveToCategoryItem =
-            CreateMoveToCategoryMenu(
-                tool);
-
-        menu.Items.Add(
-            moveToCategoryItem);
-
-        menu.Items.Add(
-            new SeparatorMenuItem());
+            new MenuPopup();
 
         var canModify =
             _managementService.CanModify(
                 tool);
 
-        var renameItem =
-            new ButtonMenuItem
-            {
-                Text = "Rename",
-                Enabled = canModify
-            };
+        menu.Add(
+            "Run",
+            () =>
+                _executionService.Run(
+                    tool));
 
-        renameItem.Click +=
-            (_, _) =>
-                RenameTool(
-                    tool);
-
-        menu.Items.Add(
-            renameItem);
-
-        var changeIconItem =
-            new ButtonMenuItem
-            {
-                Text = "Change Icon",
-                Enabled = canModify
-            };
-
-        changeIconItem.Click +=
-            (_, _) =>
-                ChangeToolIcon(
-                    tool);
-
-        menu.Items.Add(
-            changeIconItem);
-
-        menu.Items.Add(
-            CreateToolColorMenu(
-                tool));
-
-        var deleteItem =
-            new ButtonMenuItem
-            {
-                Text = "Delete",
-                Enabled = canModify
-            };
-
-        deleteItem.Click +=
-            (_, _) =>
-                DeleteTool(
-                    tool);
-
-        menu.Items.Add(
-            deleteItem);
-
-        return menu;
-    }
-
-    private ButtonMenuItem CreateToolColorMenu(
-        ToolDefinition tool)
-    {
-        var item =
-            new ButtonMenuItem
-            {
-                Text = "Change Color"
-            };
-
-        PopulateColorMenu(
-            item,
-            _settingsService.GetToolColor(
-                tool.Id),
-            colorHex =>
-            {
-                _settingsService.SetToolColor(
-                    tool.Id,
-                    colorHex);
-
-                RebuildToolList();
-            });
-
-        return item;
-    }
-
-    private ButtonMenuItem CreateCategoryColorMenu(
-        string categoryKey)
-    {
-        var item =
-            new ButtonMenuItem
-            {
-                Text = "Change Category Color"
-            };
-
-        PopulateColorMenu(
-            item,
-            _settingsService.GetCategoryColor(
-                categoryKey),
-            colorHex =>
-            {
-                _settingsService.SetCategoryColor(
-                    categoryKey,
-                    colorHex);
-
-                RebuildToolList();
-            });
-
-        return item;
-    }
-
-    private void PopulateColorMenu(
-        ButtonMenuItem parent,
-        string? currentColorHex,
-        Action<string?> applyColor)
-    {
-        var defaultItem =
-            new ButtonMenuItem
-            {
-                Text = "Default"
-            };
-
-        defaultItem.Click +=
-            (_, _) =>
-                applyColor(null);
-
-        parent.Items.Add(
-            defaultItem);
-
-        parent.Items.Add(
-            new SeparatorMenuItem());
-
-        foreach (var preset in
-                 GetColorPresets())
+        if (IsPythonTool(tool))
         {
-            var colorHex =
-                preset.Hex;
+            menu.Add(
+                "Edit in Script Editor",
+                () =>
+                    EditToolScript(
+                        tool));
 
-            var presetItem =
-                new ButtonMenuItem
-                {
-                    Text = preset.Name
-                };
-
-            presetItem.Click +=
-                (_, _) =>
-                    applyColor(
-                        colorHex);
-
-            parent.Items.Add(
-                presetItem);
+            menu.Add(
+                "Replace Script...",
+                () =>
+                    ReplaceToolScript(
+                        tool),
+                canModify);
         }
 
-    }
+        menu.Add(
+            "Properties...",
+            () =>
+                ShowToolProperties(
+                    tool));
 
-    private static IReadOnlyList<(string Name, string Hex)>
-        GetColorPresets()
-    {
-        // The panel is black and white, so tool and category
-        // highlights are shades of gray only.
-        return new (string Name, string Hex)[]
-        {
-            ("Light Gray", "#F0F0F0"),
-            ("Gray", "#D9D9D9"),
-            ("Mid Gray", "#A6A6A6"),
-            ("Dark Gray", "#595959"),
-            ("Black", "#1F1F1F")
-        };
+        menu.AddSeparator();
+
+        menu.Add(
+            _settingsService.IsFavorite(
+                tool.Id)
+                ? "Unpin from Favorites"
+                : "Pin to Favorites",
+            () =>
+                ToggleFavorite(
+                    tool));
+
+        menu.Add(
+            "Duplicate...",
+            () =>
+                DuplicateTool(
+                    tool));
+
+        menu.Add(
+            "Export Tool...",
+            () =>
+                ExportTool(
+                    tool));
+
+        menu.Add(
+            "Open Folder",
+            () =>
+                OpenToolFolder(
+                    tool));
+
+        menu.AddSeparator();
+
+        menu.Add(
+            "Delete",
+            () =>
+                DeleteTool(
+                    tool),
+            canModify);
+
+        return menu;
     }
 
     private static Color ToGray(
@@ -1480,7 +1165,6 @@ public sealed class ToolboxPanel : Panel
 
         return false;
     }
-
 
     private void RebuildToolList()
     {
@@ -1552,7 +1236,7 @@ public sealed class ToolboxPanel : Panel
             return;
 
         AddCategorySection(
-            "★ Favorites",
+            "Favorites",
             favorites,
             FavoritesSectionKey,
             forceExpanded);
@@ -1564,9 +1248,12 @@ public sealed class ToolboxPanel : Panel
         string stateKey,
         bool forceExpanded = false)
     {
+        var toolList =
+            tools.ToList();
+
         var content =
             CreateCategoryContent(
-                tools);
+                toolList);
 
         var savedExpanded =
             !_categoryExpandedStates
@@ -1588,7 +1275,8 @@ public sealed class ToolboxPanel : Panel
             new CollapsibleCategoryPanel(
                 displayName,
                 content,
-                expanded);
+                expanded,
+                toolList.Count);
 
         if (TryParseUiColor(
                 _settingsService.GetCategoryColor(
@@ -1610,10 +1298,19 @@ public sealed class ToolboxPanel : Panel
                     section.Expanded;
             };
 
-        section.HeaderContextMenu =
-            CreateCategoryContextMenu(
-                displayName,
-                stateKey);
+        section.HeaderMenuRequested +=
+            (sender, location) =>
+            {
+                if (sender is Control header)
+                {
+                    BuildCategoryMenu(
+                        displayName,
+                        stateKey)
+                        .ShowAt(
+                            header,
+                            location);
+                }
+            };
 
         _toolList.Items.Add(
             section);
@@ -1628,7 +1325,7 @@ public sealed class ToolboxPanel : Panel
                 Orientation =
                     Orientation.Vertical,
 
-                Spacing = 7,
+                Spacing = 0,
 
                 HorizontalContentAlignment =
                     HorizontalAlignment.Stretch
@@ -1637,10 +1334,11 @@ public sealed class ToolboxPanel : Panel
         foreach (var tool in
                  tools.OrderBy(
                      item =>
-                         item.Name))
+                         ToolDisplayName.For(item.Name),
+                     StringComparer.OrdinalIgnoreCase))
         {
             stack.Items.Add(
-                CreateToolButton(
+                CreateToolRow(
                     tool));
         }
 
@@ -1676,6 +1374,10 @@ public sealed class ToolboxPanel : Panel
                    query)
                ||
                Contains(
+                   ToolDisplayName.For(tool.Name),
+                   query)
+               ||
+               Contains(
                    tool.Category,
                    query)
                ||
@@ -1697,34 +1399,20 @@ public sealed class ToolboxPanel : Panel
                        .OrdinalIgnoreCase);
     }
 
-    private RoundedButton CreateToolButton(
+    private ToolRow CreateToolRow(
         ToolDefinition tool)
     {
-        var button =
-            new RoundedButton
+        var row =
+            new ToolRow
             {
                 Text =
-                    tool.Name,
+                    ToolDisplayName.For(
+                        tool.Name),
 
                 ToolTip =
-                    tool.Tooltip,
-
-                Height =
-                    ToolButtonHeight,
-
-                CornerRadius =
-                    ToolCornerRadius,
-
-                BorderWidth = 1f,
-
-                IconSize =
-                    ToolIconDisplaySize,
-
-                HorizontalPadding = 13,
-
-                IconTextSpacing = 10,
-
-                CenterContent = false
+                    string.IsNullOrWhiteSpace(tool.Tooltip)
+                        ? tool.Name
+                        : tool.Tooltip
             };
 
         if (TryParseUiColor(
@@ -1732,7 +1420,7 @@ public sealed class ToolboxPanel : Panel
                     tool.Id),
                 out var toolColor))
         {
-            button.CustomBackgroundColor =
+            row.FillColor =
                 toolColor;
         }
 
@@ -1740,11 +1428,14 @@ public sealed class ToolboxPanel : Panel
             GetIconPath(
                 tool);
 
-        if (iconPath is not null)
+        // The default icon is the same for every tool,
+        // so it is left out and the name lines up instead.
+        if (iconPath is not null
+            && !IsDefaultIcon(iconPath))
         {
             try
             {
-                button.Image =
+                row.Image =
                     LoadBitmapFresh(
                         iconPath);
             }
@@ -1759,16 +1450,60 @@ public sealed class ToolboxPanel : Panel
             }
         }
 
-        button.Click +=
+        row.Click +=
             (_, _) =>
                 _executionService.Run(
                     tool);
 
-        button.ContextMenu =
-            CreateToolContextMenu(
-                tool);
+        row.MenuRequested +=
+            (_, location) =>
+                BuildToolMenu(
+                    tool)
+                    .ShowAt(
+                        row,
+                        location);
 
-        return button;
+        return row;
+    }
+
+    private static byte[]? _defaultIconBytes;
+
+    private static bool IsDefaultIcon(
+        string iconPath)
+    {
+        try
+        {
+            if (_defaultIconBytes is null)
+            {
+                using var resource =
+                    typeof(ToolboxPanel).Assembly
+                        .GetManifestResourceStream(
+                            DefaultToolIconResource);
+
+                if (resource is null)
+                    return false;
+
+                using var buffer =
+                    new MemoryStream();
+
+                resource.CopyTo(buffer);
+
+                _defaultIconBytes =
+                    buffer.ToArray();
+            }
+
+            var info =
+                new FileInfo(iconPath);
+
+            return info.Length == _defaultIconBytes.Length
+                   && File.ReadAllBytes(iconPath)
+                       .AsSpan()
+                       .SequenceEqual(_defaultIconBytes);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void ShowEmptyState(
@@ -1779,9 +1514,8 @@ public sealed class ToolboxPanel : Panel
         if (_tools.Count == 0)
         {
             message =
-                "No tools were found.\n\n" +
-                "Use the New Tool button to import a " +
-                "Rhino 8 Python script.";
+                "No tools yet.\n\n" +
+                "Click + to add a tested Rhino 8 Python script.";
         }
         else
         {
@@ -1793,7 +1527,8 @@ public sealed class ToolboxPanel : Panel
             new Label
             {
                 Text = message,
-                Wrap = WrapMode.Word
+                Wrap = WrapMode.Word,
+                TextColor = Ui.Muted
             });
     }
 
@@ -1850,27 +1585,18 @@ public sealed class ToolboxPanel : Panel
             parent);
     }
 
-    private static void ShowReadOnlyMessage()
+    private void ShowReadOnlyMessage()
     {
-        MessageBox.Show(
-            "This is a bundled Shrike tool.\n\n" +
+        ShowStatus(
             "Bundled tools are read-only. " +
-            "Only tools created in Documents\\Shrike\\Tools " +
-            "can be renamed, moved, re-iconed, replaced, or deleted.",
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
+            "Duplicate the tool to customize a copy.");
     }
 
-    private static void ShowCategoryReadOnlyMessage()
+    private void ShowCategoryReadOnlyMessage()
     {
-        MessageBox.Show(
-            "This category contains one or more bundled Shrike tools.\n\n" +
-            "A category can only be renamed when all of its tools are " +
-            "user-created tools in Documents\\Shrike\\Tools.",
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Information);
+        ShowStatus(
+            "This category contains bundled tools, " +
+            "so it cannot be renamed.");
     }
 
     private static void ShowError(

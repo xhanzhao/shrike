@@ -96,6 +96,10 @@ public sealed class ToolCreationService
         {
             Directory.CreateDirectory(destination);
 
+            var entryFileName =
+                MakeScriptFileName(
+                    request.Name);
+
             var iconFileName =
                 CreateToolIcon(
                     request.SourceIconPath,
@@ -110,22 +114,22 @@ public sealed class ToolCreationService
                     ["type"] = type,
                     ["icon"] = iconFileName,
                     ["tooltip"] = request.Tooltip.Trim(),
-                    ["entry"] = "main.py"
+                    ["entry"] = entryFileName
                 };
 
-            var mainPyPath =
+            var entryPath =
                 Path.Combine(
                     destination,
-                    "main.py");
+                    entryFileName);
 
             CopyPython3Script(
                 request.SourcePythonPath,
-                mainPyPath);
+                entryPath);
 
             // The first entry in the version history.
             _historyService.Snapshot(
                 destination,
-                mainPyPath,
+                entryPath,
                 ToolHistoryReason.Created);
 
             var manifestPath =
@@ -306,6 +310,59 @@ public sealed class ToolCreationService
                 string.Empty);
 
         return filtered.Trim('.', ' ');
+    }
+
+    // Module names a tool script must not take: a script called
+    // random.py in the tool folder would shadow "import random".
+    private static readonly HashSet<string> ReservedModuleNames =
+        new(StringComparer.Ordinal)
+        {
+            "abc", "array", "ast", "base64", "bisect", "calendar",
+            "cmath", "code", "collections", "copy", "csv", "datetime",
+            "decimal", "enum", "fractions", "functools", "glob", "hashlib",
+            "heapq", "inspect", "io", "itertools", "json", "logging",
+            "main", "math", "operator", "os", "pathlib", "pickle",
+            "platform", "queue", "random", "re", "select", "shutil",
+            "signal", "socket", "statistics", "string", "struct",
+            "subprocess", "sys", "tempfile", "test", "threading", "time",
+            "timeit", "token", "tokenize", "types", "typing", "uuid",
+            "warnings", "weakref", "zipfile",
+            "clr", "ghpythonlib", "rhinoscript", "rhinoscriptsyntax",
+            "scriptcontext", "rhino", "system", "eto", "grasshopper"
+        };
+
+    /// <summary>
+    /// Names the script after the tool, so open tabs in Rhino's
+    /// Script Editor are told apart: "Random Select" becomes
+    /// random_select.py. A name that would shadow a Python module
+    /// gets a "_tool" suffix.
+    /// </summary>
+    internal static string MakeScriptFileName(
+        string toolName)
+    {
+        var name =
+            Regex.Replace(
+                toolName.Trim(),
+                "([a-z])([A-Z])",
+                "$1_$2");
+
+        name =
+            Regex.Replace(
+                name.ToLowerInvariant(),
+                "[^a-z0-9]+",
+                "_")
+            .Trim('_');
+
+        if (name.Length == 0)
+            return "main.py";
+
+        if (char.IsDigit(name[0]))
+            name = "tool_" + name;
+
+        if (ReservedModuleNames.Contains(name))
+            name += "_tool";
+
+        return name + ".py";
     }
 
     private static string MakeToolId(
