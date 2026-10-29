@@ -31,9 +31,24 @@ public sealed class FieldFrame : Drawable
 
         BackgroundColor = Ui.Surface;
 
+        // Both cases go through a TableLayout: a Drawable on Windows
+        // does not stretch a bare child to its height, which left a
+        // multi-line text area small and centered.
         Content =
             multiline
-                ? input
+                ? new TableLayout
+                {
+                    Rows =
+                    {
+                        new TableRow(
+                            new TableCell(
+                                input,
+                                scaleWidth: true))
+                        {
+                            ScaleHeight = true
+                        }
+                    }
+                }
                 : new TableLayout
                 {
                     Rows =

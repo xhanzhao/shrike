@@ -70,7 +70,7 @@ public sealed class ToolHistoryDialog : ShrikeDialog
                 ReadOnly = true,
                 Wrap = false,
                 Border = BorderType.None,
-                Font = Fonts.Monospace(9),
+                Font = CodeFont(),
                 BackgroundColor = Ui.Surface,
                 TextColor = Ui.Ink
             };
@@ -206,6 +206,22 @@ public sealed class ToolHistoryDialog : ShrikeDialog
             _versionList;
 
         LoadVersions();
+    }
+
+    /// <summary>
+    /// Consolas, the code font of Rhino's Script Editor on Windows,
+    /// with the system monospace font as a fallback.
+    /// </summary>
+    private static Font CodeFont()
+    {
+        try
+        {
+            return new Font("Consolas", 9.5f);
+        }
+        catch
+        {
+            return Fonts.Monospace(9);
+        }
     }
 
     protected override void Cancel()

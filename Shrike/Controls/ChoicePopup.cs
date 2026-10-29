@@ -24,10 +24,16 @@ public sealed class ChoicePopup : Form
 
     public event EventHandler<string>? Picked;
 
+    /// <summary>
+    /// Raised when the action row under the list is clicked.
+    /// </summary>
+    public event EventHandler? ActionPicked;
+
     public ChoicePopup(
         IReadOnlyList<string> choices,
         string? current,
-        int width)
+        int width,
+        string? actionText = null)
     {
         WindowStyle = WindowStyle.None;
         Resizable = false;
@@ -55,7 +61,7 @@ public sealed class ChoicePopup : Form
         var visibleRows =
             Math.Min(
                 MaxVisibleRows,
-                Math.Max(1, choices.Count));
+                choices.Count);
 
         var listHeight =
             visibleRows * RowHeight;
@@ -72,17 +78,61 @@ public sealed class ChoicePopup : Form
                 }
                 : _list;
 
+        var body =
+            new StackLayout
+            {
+                Orientation = Orientation.Vertical,
+                Spacing = 0,
+
+                HorizontalContentAlignment =
+                    HorizontalAlignment.Stretch
+            };
+
+        if (choices.Count > 0)
+            body.Items.Add(listHost);
+
+        var actionHeight = 0;
+
+        if (!string.IsNullOrWhiteSpace(actionText))
+        {
+            var action =
+                new ActionRow(actionText);
+
+            action.Click +=
+                (_, _) =>
+                {
+                    ActionPicked?.Invoke(this, EventArgs.Empty);
+                    CloseOnce();
+                };
+
+            if (choices.Count > 0)
+            {
+                body.Items.Add(
+                    new Drawable
+                    {
+                        Height = 1,
+                        BackgroundColor = Ui.Rule
+                    });
+
+                actionHeight += 1;
+            }
+
+            body.Items.Add(action);
+
+            actionHeight += RowHeight;
+        }
+
         Content =
             new PopupFrame
             {
                 Padding = new Padding(Inset + 1),
-                Content = listHost
+                Content = body
             };
 
         ClientSize =
             new Size(
                 width,
-                listHeight + Inset * 2 + 2);
+                listHeight + actionHeight + Inset * 2 + 2);
 
         LostFocus +=
             (_, _) =>
@@ -200,6 +250,99 @@ public sealed class ChoicePopup : Form
                 1f,
                 Ui.RuleStrong,
                 Ui.Surface);
+        }
+    }
+
+    /// <summary>
+    /// A row under the list for an action rather than a choice,
+    /// e.g. "New category...".
+    /// </summary>
+    private sealed class ActionRow : Drawable
+    {
+        private readonly string _text;
+
+        private bool _hover;
+
+        public event EventHandler? Click;
+
+        public ActionRow(
+            string text)
+        {
+            _text = text;
+            Height = RowHeight;
+            Cursor = Cursors.Pointer;
+            BackgroundColor = Ui.Surface;
+        }
+
+        protected override void OnMouseEnter(
+            MouseEventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hover = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(
+            MouseEventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hover = false;
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(
+            MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+
+            if ((e.Buttons & MouseButtons.Primary) != 0)
+                Click?.Invoke(this, EventArgs.Empty);
+        }
+
+        protected override void OnPaint(
+            PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            var g = e.Graphics;
+            g.AntiAlias = true;
+
+            var row =
+                new RectangleF(0, 0, Width, Height);
+
+            if (_hover)
+            {
+                Draw.Frame(
+                    g,
+                    RectangleF.Inflate(row, 0, -2),
+                    4f,
+                    Ui.Hover,
+                    Ui.Hover);
+            }
+
+            // A plus sign where the list draws its check mark.
+            using var pen =
+                new Pen(
+                    Ui.Ink,
+                    1.4f);
+
+            var center =
+                new PointF(14f, Height / 2f);
+
+            g.DrawLine(pen, center.X - 4f, center.Y, center.X + 4f, center.Y);
+            g.DrawLine(pen, center.X, center.Y - 4f, center.X, center.Y + 4f);
+
+            var font = Ui.BodyFont;
+
+            var size =
+                font.MeasureString(_text);
+
+            g.DrawText(
+                font,
+                Ui.Ink,
+                28f,
+                (Height - size.Height) / 2f,
+                _text);
         }
     }
 

@@ -65,7 +65,6 @@ public sealed class CategoryField : Panel
             {
                 Width = 22,
                 Height = Ui.FieldHeight - 6,
-                Enabled = _categories.Count > 0,
                 ToolTip = "Existing categories"
             };
 
@@ -110,7 +109,15 @@ public sealed class CategoryField : Panel
             new ChoicePopup(
                 _categories,
                 Category,
-                anchor.Width);
+                anchor.Width,
+                "New category...");
+
+        popup.ActionPicked +=
+            (_, _) =>
+            {
+                _textBox.Text = string.Empty;
+                _textBox.Focus();
+            };
 
         popup.Picked +=
             (_, picked) =>
