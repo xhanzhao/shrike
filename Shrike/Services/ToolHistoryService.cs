@@ -222,6 +222,61 @@ public sealed class ToolHistoryService
             entries);
     }
 
+    /// <summary>
+    /// Removes one saved version. The tool's current script is
+    /// not touched.
+    /// </summary>
+    public void DeleteEntry(
+        ToolDefinition tool,
+        ToolHistoryEntry entry)
+    {
+        var historyDirectory =
+            GetHistoryDirectory(
+                tool.ToolDirectory);
+
+        var entries =
+            LoadIndex(
+                historyDirectory);
+
+        entries.RemoveAll(
+            candidate =>
+                string.Equals(
+                    candidate.FileName,
+                    entry.FileName,
+                    StringComparison.OrdinalIgnoreCase));
+
+        var path =
+            GetEntryPath(
+                tool.ToolDirectory,
+                entry);
+
+        if (File.Exists(path))
+            File.Delete(path);
+
+        SaveIndex(
+            historyDirectory,
+            entries);
+    }
+
+    /// <summary>
+    /// Removes every saved version. The tool's current script is
+    /// not touched.
+    /// </summary>
+    public void DeleteAll(
+        ToolDefinition tool)
+    {
+        var historyDirectory =
+            GetHistoryDirectory(
+                tool.ToolDirectory);
+
+        if (Directory.Exists(historyDirectory))
+        {
+            Directory.Delete(
+                historyDirectory,
+                recursive: true);
+        }
+    }
+
     public static string GetEntryScriptPath(
         ToolDefinition tool)
     {
