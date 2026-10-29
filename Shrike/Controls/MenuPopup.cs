@@ -7,13 +7,15 @@ namespace Shrike.Controls;
 /// A drop-down menu in Shrike's black-and-white style, used instead
 /// of the system menu for the panel's + and options buttons.
 ///
-/// Add items with Add and AddSeparator, then ShowBelow a button.
+/// Add items with Add, AddHeading and AddSeparator, then ShowBelow
+/// a button or ShowAt the mouse for a right-click menu.
 /// It closes when an item runs, on Escape, or when focus moves away.
 /// </summary>
 public sealed class MenuPopup : Form
 {
     private const int RowHeight = 28;
     private const int SeparatorHeight = 9;
+    private const int HeadingHeight = 22;
     private const int Inset = 4;
     private const int MinWidth = 180;
 
@@ -40,16 +42,36 @@ public sealed class MenuPopup : Form
                 CloseOnce();
     }
 
+    /// <param name="isChecked">Draws a check mark before the text.</param>
+    /// <param name="swatch">Draws a color dot at the end of the row.</param>
     public void Add(
         string text,
         Action action,
-        bool enabled = true)
+        bool enabled = true,
+        bool isChecked = false,
+        Color? swatch = null)
     {
         _entries.Add(
             new MenuEntry(
                 text,
                 action,
-                enabled));
+                enabled,
+                isChecked,
+                swatch));
+    }
+
+    /// <summary>
+    /// A small muted label that names the group of items below it.
+    /// </summary>
+    public void AddHeading(
+        string text)
+    {
+        _entries.Add(
+            new MenuEntry(
+                text,
+                () => { },
+                Enabled: false,
+                IsHeading: true));
     }
 
     public void AddSeparator()
@@ -66,6 +88,35 @@ public sealed class MenuPopup : Form
     public void ShowBelow(
         Control anchor)
     {
+        var width =
+            Build();
+
+        ShowAtScreen(
+            anchor,
+            anchor.PointToScreen(
+                new PointF(
+                    anchor.Width - width,
+                    anchor.Height + 4)));
+    }
+
+    /// <summary>
+    /// Shows the menu with its top-left corner at a point in the
+    /// owner's coordinates, e.g. where the user right-clicked.
+    /// </summary>
+    public void ShowAt(
+        Control owner,
+        PointF location)
+    {
+        Build();
+
+        ShowAtScreen(
+            owner,
+            owner.PointToScreen(
+                location));
+    }
+
+    private int Build()
+    {
         var font = Ui.BodyFont;
 
         var textWidth =
@@ -78,7 +129,7 @@ public sealed class MenuPopup : Form
         var width =
             Math.Max(
                 MinWidth,
-                (int)Math.Ceiling(textWidth) + 28 + 24 + Inset * 2);
+                (int)Math.Ceiling(textWidth) + 28 + 36 + Inset * 2);
 
         _list =
             new MenuList(_entries)
@@ -105,6 +156,13 @@ public sealed class MenuPopup : Form
                 width,
                 _list.Height + Inset * 2 + 2);
 
+        return width;
+    }
+
+    private void ShowAtScreen(
+        Control anchor,
+        PointF screenLocation)
+    {
         var window =
             anchor.ParentWindow;
 
@@ -117,19 +175,13 @@ public sealed class MenuPopup : Form
             window.LocationChanged += OnOwnerChanged;
         }
 
-        var origin =
-            anchor.PointToScreen(
-                new PointF(
-                    anchor.Width - width,
-                    anchor.Height + 4));
-
         Location =
             new Point(
-                (int)Math.Round(origin.X),
-                (int)Math.Round(origin.Y));
+                (int)Math.Round(screenLocation.X),
+                (int)Math.Round(screenLocation.Y));
 
         Show();
-        _list.Focus();
+        _list?.Focus();
     }
 
     protected override void OnKeyDown(
@@ -190,7 +242,10 @@ public sealed class MenuPopup : Form
     private sealed record MenuEntry(
         string Text,
         Action Action,
-        bool Enabled)
+        bool Enabled,
+        bool Checked = false,
+        Color? Swatch = null,
+        bool IsHeading = false)
     {
         public static readonly MenuEntry Separator =
             new(string.Empty, () => { }, false);
@@ -199,11 +254,28 @@ public sealed class MenuPopup : Form
             ReferenceEquals(this, Separator);
     }
 
+    private static void DrawCheck(
+        Graphics g,
+        PointF center)
+    {
+        using var pen =
+            new Pen(
+                Ui.Ink,
+                1.6f);
+
+        g.DrawLine(pen, center.X - 4f, center.Y, center.X - 1f, center.Y + 3f);
+        g.DrawLine(pen, center.X - 1f, center.Y + 3f, center.X + 4f, center.Y - 3f);
+    }
+
     private sealed class MenuList : Drawable
     {
         private readonly IReadOnlyList<MenuEntry> _entries;
 
         private readonly float[] _tops;
+
+        // Text moves right to leave room for check marks
+        // when any item can show one.
+        private readonly float _textLeft;
 
         private int _highlightIndex = -1;
 
@@ -227,6 +299,11 @@ public sealed class MenuPopup : Form
             }
 
             Height = (int)Math.Ceiling(y);
+
+            _textLeft =
+                entries.Any(entry => entry.Checked)
+                    ? 28f
+                    : 12f;
         }
 
         private float RowHeightOf(
@@ -234,7 +311,9 @@ public sealed class MenuPopup : Form
         {
             return _entries[index].IsSeparator
                 ? SeparatorHeight
-                : RowHeight;
+                : _entries[index].IsHeading
+                    ? HeadingHeight
+                    : RowHeight;
         }
 
         private bool IsPickable(
@@ -383,17 +462,62 @@ public sealed class MenuPopup : Form
                         Ui.Hover);
                 }
 
+                if (entry.IsHeading)
+                {
+                    var small = Ui.SmallFont;
+
+                    var headingSize =
+                        small.MeasureString(entry.Text);
+
+                    g.DrawText(
+                        small,
+                        Ui.Muted,
+                        12f,
+                        row.Y + HeadingHeight - headingSize.Height - 2f,
+                        entry.Text);
+
+                    continue;
+                }
+
+                if (entry.Checked)
+                {
+                    DrawCheck(
+                        g,
+                        new PointF(
+                            14f,
+                            row.Y + RowHeight / 2f));
+                }
+
                 var size =
                     font.MeasureString(entry.Text);
 
                 g.DrawText(
-                    font,
+                    entry.Checked
+                        ? Ui.StrongFont
+                        : font,
                     entry.Enabled
                         ? Ui.Ink
                         : Ui.Muted,
-                    row.X + 12f,
+                    _textLeft,
                     row.Y + (RowHeight - size.Height) / 2f,
                     entry.Text);
+
+                if (entry.Swatch is { } swatch)
+                {
+                    var dot =
+                        new RectangleF(
+                            Width - 26f,
+                            row.Y + (RowHeight - 14f) / 2f,
+                            14f,
+                            14f);
+
+                    // Outline first, so the lightest gray shows.
+                    g.FillEllipse(Ui.Rule, dot);
+
+                    g.FillEllipse(
+                        swatch,
+                        RectangleF.Inflate(dot, -1f, -1f));
+                }
             }
         }
     }

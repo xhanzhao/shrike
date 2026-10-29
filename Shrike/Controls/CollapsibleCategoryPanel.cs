@@ -28,15 +28,13 @@ public sealed class CollapsibleCategoryPanel : Drawable
     }
 
     /// <summary>
-    /// Right-click menu for the category header.
+    /// Raised on right-click of the header. The sender is the header
+    /// control and the point is in its coordinates.
     /// </summary>
-    public ContextMenu? HeaderContextMenu
+    public event EventHandler<PointF>? HeaderMenuRequested
     {
-        get =>
-            _header.ContextMenu;
-
-        set =>
-            _header.ContextMenu = value;
+        add => _header.MenuRequested += value;
+        remove => _header.MenuRequested -= value;
     }
 
     /// <summary>
@@ -167,6 +165,8 @@ public sealed class CollapsibleCategoryPanel : Drawable
 
         public event EventHandler? Click;
 
+        public event EventHandler<PointF>? MenuRequested;
+
         public bool Expanded { get; set; }
 
         public Color? FillColor { get; set; }
@@ -205,6 +205,8 @@ public sealed class CollapsibleCategoryPanel : Drawable
 
             if ((e.Buttons & MouseButtons.Primary) != 0)
                 Click?.Invoke(this, EventArgs.Empty);
+            else if ((e.Buttons & MouseButtons.Alternate) != 0)
+                MenuRequested?.Invoke(this, e.Location);
         }
 
         protected override void OnPaint(

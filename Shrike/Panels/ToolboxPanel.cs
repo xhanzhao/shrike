@@ -898,12 +898,12 @@ public sealed class ToolboxPanel : Panel
         ReloadTools();
     }
 
-    private ContextMenu CreateCategoryContextMenu(
+    private MenuPopup BuildCategoryMenu(
         string displayName,
         string categoryKey)
     {
         var menu =
-            new ContextMenu();
+            new MenuPopup();
 
         var isFavorites =
             string.Equals(
@@ -923,31 +923,64 @@ public sealed class ToolboxPanel : Panel
                                 StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-            var renameItem =
-                new ButtonMenuItem
-                {
-                    Text = "Rename Category",
-
-                    Enabled =
-                        _managementService.CanRenameCategory(
-                            categoryTools)
-                };
-
-            renameItem.Click +=
-                (_, _) =>
+            menu.Add(
+                "Rename Category...",
+                () =>
                     RenameCategory(
-                        displayName);
+                        displayName),
+                _managementService.CanRenameCategory(
+                    categoryTools));
 
-            menu.Items.Add(
-                renameItem);
-
-            menu.Items.Add(
-                new SeparatorMenuItem());
+            menu.AddSeparator();
         }
 
-        menu.Items.Add(
-            CreateCategoryColorMenu(
-                categoryKey));
+        // The header colors, flat in the menu instead of a submenu.
+        // The current one is checked and each shows its gray.
+        var currentColor =
+            _settingsService.GetCategoryColor(
+                categoryKey);
+
+        void ApplyColor(
+            string? colorHex)
+        {
+            _settingsService.SetCategoryColor(
+                categoryKey,
+                colorHex);
+
+            RebuildToolList();
+        }
+
+        menu.AddHeading(
+            "Header color");
+
+        menu.Add(
+            "No color",
+            () =>
+                ApplyColor(null),
+            isChecked:
+                string.IsNullOrWhiteSpace(
+                    currentColor));
+
+        foreach (var preset in
+                 UserSettingsService.ColorPresets)
+        {
+            var colorHex =
+                preset.Hex;
+
+            menu.Add(
+                preset.Name,
+                () =>
+                    ApplyColor(
+                        colorHex),
+                isChecked:
+                    string.Equals(
+                        colorHex,
+                        currentColor,
+                        StringComparison.OrdinalIgnoreCase),
+                swatch:
+                    Color.Parse(
+                        colorHex));
+        }
 
         return menu;
     }
@@ -1015,18 +1048,17 @@ public sealed class ToolboxPanel : Panel
         ReloadTools();
     }
 
-    private ContextMenu CreateToolContextMenu(
+    private MenuPopup BuildToolMenu(
         ToolDefinition tool)
     {
         var menu =
-            new ContextMenu();
+            new MenuPopup();
 
         var canModify =
             _managementService.CanModify(
                 tool);
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             "Run",
             () =>
                 _executionService.Run(
@@ -1034,15 +1066,13 @@ public sealed class ToolboxPanel : Panel
 
         if (IsPythonTool(tool))
         {
-            AddMenuItem(
-                menu,
+            menu.Add(
                 "Edit in Script Editor",
                 () =>
                     EditToolScript(
                         tool));
 
-            AddMenuItem(
-                menu,
+            menu.Add(
                 "Replace Script...",
                 () =>
                     ReplaceToolScript(
@@ -1050,18 +1080,15 @@ public sealed class ToolboxPanel : Panel
                 canModify);
         }
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             "Properties...",
             () =>
                 ShowToolProperties(
                     tool));
 
-        menu.Items.Add(
-            new SeparatorMenuItem());
+        menu.AddSeparator();
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             _settingsService.IsFavorite(
                 tool.Id)
                 ? "Unpin from Favorites"
@@ -1070,32 +1097,27 @@ public sealed class ToolboxPanel : Panel
                 ToggleFavorite(
                     tool));
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             "Duplicate...",
             () =>
                 DuplicateTool(
                     tool));
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             "Export Tool...",
             () =>
                 ExportTool(
                     tool));
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             "Open Folder",
             () =>
                 OpenToolFolder(
                     tool));
 
-        menu.Items.Add(
-            new SeparatorMenuItem());
+        menu.AddSeparator();
 
-        AddMenuItem(
-            menu,
+        menu.Add(
             "Delete",
             () =>
                 DeleteTool(
@@ -1103,96 +1125,6 @@ public sealed class ToolboxPanel : Panel
             canModify);
 
         return menu;
-    }
-
-    private static void AddMenuItem(
-        ContextMenu menu,
-        string text,
-        Action onClick,
-        bool enabled = true)
-    {
-        var item =
-            new ButtonMenuItem
-            {
-                Text = text,
-                Enabled = enabled
-            };
-
-        item.Click +=
-            (_, _) =>
-                onClick();
-
-        menu.Items.Add(
-            item);
-    }
-
-    private ButtonMenuItem CreateCategoryColorMenu(
-        string categoryKey)
-    {
-        var item =
-            new ButtonMenuItem
-            {
-                Text = "Change Category Color"
-            };
-
-        PopulateColorMenu(
-            item,
-            _settingsService.GetCategoryColor(
-                categoryKey),
-            colorHex =>
-            {
-                _settingsService.SetCategoryColor(
-                    categoryKey,
-                    colorHex);
-
-                RebuildToolList();
-            });
-
-        return item;
-    }
-
-    private void PopulateColorMenu(
-        ButtonMenuItem parent,
-        string? currentColorHex,
-        Action<string?> applyColor)
-    {
-        var defaultItem =
-            new ButtonMenuItem
-            {
-                Text = "Default"
-            };
-
-        defaultItem.Click +=
-            (_, _) =>
-                applyColor(null);
-
-        parent.Items.Add(
-            defaultItem);
-
-        parent.Items.Add(
-            new SeparatorMenuItem());
-
-        foreach (var preset in
-                 UserSettingsService.ColorPresets)
-        {
-            var colorHex =
-                preset.Hex;
-
-            var presetItem =
-                new ButtonMenuItem
-                {
-                    Text = preset.Name
-                };
-
-            presetItem.Click +=
-                (_, _) =>
-                    applyColor(
-                        colorHex);
-
-            parent.Items.Add(
-                presetItem);
-        }
-
     }
 
     private static Color ToGray(
@@ -1366,10 +1298,19 @@ public sealed class ToolboxPanel : Panel
                     section.Expanded;
             };
 
-        section.HeaderContextMenu =
-            CreateCategoryContextMenu(
-                displayName,
-                stateKey);
+        section.HeaderMenuRequested +=
+            (sender, location) =>
+            {
+                if (sender is Control header)
+                {
+                    BuildCategoryMenu(
+                        displayName,
+                        stateKey)
+                        .ShowAt(
+                            header,
+                            location);
+                }
+            };
 
         _toolList.Items.Add(
             section);
@@ -1514,9 +1455,13 @@ public sealed class ToolboxPanel : Panel
                 _executionService.Run(
                     tool);
 
-        row.ContextMenu =
-            CreateToolContextMenu(
-                tool);
+        row.MenuRequested +=
+            (_, location) =>
+                BuildToolMenu(
+                    tool)
+                    .ShowAt(
+                        row,
+                        location);
 
         return row;
     }

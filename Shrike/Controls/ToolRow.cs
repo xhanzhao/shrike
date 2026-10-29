@@ -22,6 +22,11 @@ public sealed class ToolRow : Drawable
 
     public event EventHandler? Click;
 
+    /// <summary>
+    /// Raised on right-click, with the point in this row's coordinates.
+    /// </summary>
+    public event EventHandler<PointF>? MenuRequested;
+
     public string Text { get; set; } = string.Empty;
 
     public Image? Image { get; set; }
@@ -75,6 +80,12 @@ public sealed class ToolRow : Drawable
         var wasDown = _mouseDown;
         _mouseDown = false;
         Invalidate();
+
+        if ((e.Buttons & MouseButtons.Alternate) != 0)
+        {
+            MenuRequested?.Invoke(this, e.Location);
+            return;
+        }
 
         if (wasDown
             && (e.Buttons & MouseButtons.Primary) != 0
