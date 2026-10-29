@@ -899,7 +899,8 @@ public sealed class ToolboxPanel : Panel
 
         var dialog =
             new CategoryNameDialog(
-                "Rename Category",
+                "Rename category",
+                "Every tool in this category moves to the new name.",
                 categoryName,
                 "Rename");
 

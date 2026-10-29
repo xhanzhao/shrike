@@ -1,102 +1,78 @@
-using Eto.Drawing;
 using Eto.Forms;
+using Shrike.Controls;
 using Shrike.Models;
 
 namespace Shrike.Dialogs;
 
-public sealed class DuplicateToolDialog : Dialog<bool>
+public sealed class DuplicateToolDialog : ShrikeDialog
 {
     private readonly TextBox _nameTextBox;
-    private readonly ComboBox _categoryComboBox;
+
+    private readonly CategoryField _categoryField;
 
     public string NewName =>
-        (_nameTextBox.Text ?? string.Empty).Trim();
+        (_nameTextBox.Text ?? string.Empty)
+        .Trim();
 
     public string Category =>
-        DialogLayout.ReadCategory(_categoryComboBox);
+        _categoryField.Category;
 
     public DuplicateToolDialog(
         ToolDefinition sourceTool,
         IEnumerable<string> existingCategories)
+        : base(
+            "Duplicate tool",
+            $"Make an editable copy of \"{sourceTool.Name}\". " +
+            "The copy keeps the script and icon.")
     {
-        Title = "Duplicate Tool";
-        Width = 440;
-        Resizable = false;
-        Padding = 12;
+        _nameTextBox =
+            Ui.TextBox(
+                $"{sourceTool.Name} Copy");
 
-        _nameTextBox = new TextBox
-        {
-            Text = $"{sourceTool.Name} Copy"
-        };
-
-        _categoryComboBox =
-            DialogLayout.CategoryComboBox(
+        _categoryField =
+            new CategoryField(
                 existingCategories,
                 sourceTool.Category);
 
-        var duplicateButton = new Button
-        {
-            Text = "Duplicate"
-        };
+        SetBody(
+            Ui.Stack(
+                Ui.FieldGap,
+                Ui.Field(
+                    "Name",
+                    new FieldFrame(
+                        _nameTextBox)),
+                Ui.Field(
+                    "Category",
+                    _categoryField)));
 
-        duplicateButton.Click +=
-            (_, _) => TryAccept();
+        AddCancelButton();
 
-        var cancelButton = new Button
-        {
-            Text = "Cancel"
-        };
+        AddButton(
+            "Duplicate",
+            TryAccept,
+            primary: true);
 
-        cancelButton.Click +=
-            (_, _) => Close(false);
-
-        DefaultButton = duplicateButton;
-        AbortButton = cancelButton;
-
-        var layout = new DynamicLayout
-        {
-            Spacing = new Size(8, 8)
-        };
-
-        layout.AddRow(
-            new Label { Text = "New tool name" },
-            _nameTextBox);
-
-        layout.AddRow(
-            new Label { Text = "Category" },
-            _categoryComboBox);
-
-        layout.AddSeparateRow(
-            null,
-            duplicateButton,
-            cancelButton);
-
-        Content = layout;
+        InitialFocus =
+            _nameTextBox;
     }
 
     private void TryAccept()
     {
         if (string.IsNullOrWhiteSpace(NewName))
         {
-            MessageBox.Show(
-                this,
-                "Tool name cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Give the copy a name.");
 
+            _nameTextBox.Focus();
             return;
         }
 
         if (string.IsNullOrWhiteSpace(Category))
         {
-            MessageBox.Show(
-                this,
-                "Category cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Pick or type a category.");
 
+            _categoryField.FocusInput();
             return;
         }
 

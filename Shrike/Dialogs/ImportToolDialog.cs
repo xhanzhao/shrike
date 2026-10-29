@@ -1,116 +1,78 @@
-using Eto.Drawing;
 using Eto.Forms;
+using Shrike.Controls;
 using Shrike.Models;
 
 namespace Shrike.Dialogs;
 
-public sealed class ImportToolDialog : Dialog<bool>
+public sealed class ImportToolDialog : ShrikeDialog
 {
     private readonly TextBox _nameTextBox;
-    private readonly ComboBox _categoryComboBox;
+
+    private readonly CategoryField _categoryField;
 
     public string ToolName =>
         (_nameTextBox.Text ?? string.Empty)
         .Trim();
 
     public string Category =>
-        DialogLayout.ReadCategory(_categoryComboBox);
+        _categoryField.Category;
 
     public ImportToolDialog(
         ToolPackageInfo packageInfo,
         IEnumerable<string> existingCategories)
+        : base(
+            "Import tool",
+            "Add a shared .shriketool to your toolbox. " +
+            "You can rename it or file it under another category.")
     {
-        Title = "Import Shrike Tool";
-        Width = 440;
-        Resizable = false;
-
         _nameTextBox =
-            new TextBox
-            {
-                Text = packageInfo.Name
-            };
+            Ui.TextBox(
+                packageInfo.Name);
 
-        _categoryComboBox =
-            DialogLayout.CategoryComboBox(
+        _categoryField =
+            new CategoryField(
                 existingCategories,
                 packageInfo.Category);
 
-        var importButton =
-            new Button
-            {
-                Text = "Import"
-            };
+        SetBody(
+            Ui.Stack(
+                Ui.FieldGap,
+                Ui.Field(
+                    "Name",
+                    new FieldFrame(
+                        _nameTextBox)),
+                Ui.Field(
+                    "Category",
+                    _categoryField)));
 
-        importButton.Click +=
-            (_, _) => TryAccept();
+        AddCancelButton();
 
-        var cancelButton =
-            new Button
-            {
-                Text = "Cancel"
-            };
+        AddButton(
+            "Import",
+            TryAccept,
+            primary: true);
 
-        cancelButton.Click +=
-            (_, _) => Close(false);
-
-        DefaultButton = importButton;
-        AbortButton = cancelButton;
-
-        var infoLabel =
-            new Label
-            {
-                Text =
-                    "Type: Python 3"
-            };
-
-        var layout =
-            new DynamicLayout
-            {
-                Padding = 12,
-                Spacing = new Size(8, 8)
-            };
-
-        layout.AddRow(
-            new Label { Text = "Tool Name" },
-            _nameTextBox);
-
-        layout.AddRow(
-            new Label { Text = "Category" },
-            _categoryComboBox);
-
-        layout.AddRow(
-            null,
-            infoLabel);
-
-        layout.AddSeparateRow(
-            null,
-            importButton,
-            cancelButton);
-
-        Content = layout;
+        InitialFocus =
+            _nameTextBox;
     }
 
     private void TryAccept()
     {
         if (string.IsNullOrWhiteSpace(ToolName))
         {
-            MessageBox.Show(
-                "Tool name cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Give the tool a name.");
 
+            _nameTextBox.Focus();
             return;
         }
 
         if (string.IsNullOrWhiteSpace(Category))
         {
-            MessageBox.Show(
-                "Category cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Pick or type a category.");
 
+            _categoryField.FocusInput();
             return;
         }
 

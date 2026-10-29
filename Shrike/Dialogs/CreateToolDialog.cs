@@ -1,31 +1,29 @@
 using Eto.Drawing;
 using Eto.Forms;
+using Shrike.Controls;
 using Shrike.Models;
 using Shrike.Services;
 
 namespace Shrike.Dialogs;
 
-public sealed class CreateToolDialog : Dialog<bool>
+public sealed class CreateToolDialog : ShrikeDialog
 {
     private const string DefaultCategory = "Utility";
 
-    private readonly TextBox
-        _pythonPathTextBox;
+    private const string DefaultToolIconResource =
+        "Shrike.Resources.DefaultToolIcon.png";
 
-    private readonly TextBox
-        _nameTextBox;
+    private readonly ScriptPicker _scriptPicker;
 
-    private readonly ComboBox
-        _categoryComboBox;
+    private readonly IconTile _iconTile;
 
-    private readonly TextArea
-        _tooltipTextArea;
+    private readonly TextBox _nameTextBox;
 
-    private readonly TextBox
-        _iconPathTextBox;
+    private readonly CategoryField _categoryField;
 
-    private readonly Expander
-        _moreOptions;
+    private readonly TextArea _tooltipTextArea;
+
+    private string? _iconPath;
 
     // The name and tooltip filled in from the last script picked.
     // They are only replaced when the user has not edited them.
@@ -44,31 +42,39 @@ public sealed class CreateToolDialog : Dialog<bool>
     public CreateToolDialog(
         IEnumerable<string> existingCategories,
         string? initialCategory = null)
+        : base(
+            "Create tool",
+            "Add a tested Python script to your toolbox.")
     {
-        Title = "Create New Tool";
-        Width = 600;
-        Resizable = false;
-
-        _pythonPathTextBox =
-            new TextBox
-            {
-                ReadOnly = true,
-                PlaceholderText =
-                    "Select a tested Rhino 8 Python file..."
-            };
-
-        _nameTextBox =
-            new TextBox
-            {
-                PlaceholderText =
-                    "Filled in from the file name"
-            };
-
         var categories =
             existingCategories.ToList();
 
-        _categoryComboBox =
-            DialogLayout.CategoryComboBox(
+        _scriptPicker =
+            new ScriptPicker();
+
+        _scriptPicker.Click +=
+            (_, _) =>
+                BrowsePython();
+
+        _iconTile =
+            new IconTile
+            {
+                Image =
+                    EmbeddedImageLoader.LoadBitmap(
+                        DefaultToolIconResource)
+            };
+
+        _iconTile.Click +=
+            (_, _) =>
+                BrowseIcon();
+
+        _nameTextBox =
+            Ui.TextBox(
+                placeholder:
+                    "Filled in from the file name");
+
+        _categoryField =
+            new CategoryField(
                 categories,
                 !string.IsNullOrWhiteSpace(initialCategory)
                     ? initialCategory
@@ -77,143 +83,52 @@ public sealed class CreateToolDialog : Dialog<bool>
                         : DefaultCategory);
 
         _tooltipTextArea =
-            new TextArea
-            {
-                Height = 60
-            };
+            Ui.TextArea();
 
-        _iconPathTextBox =
-            new TextBox
-            {
-                ReadOnly = true,
-                PlaceholderText =
-                    "Default icon"
-            };
-
-        var browsePythonButton =
-            new Button
-            {
-                Text = "Browse...",
-                Width = DialogLayout.ActionButtonWidth
-            };
-
-        browsePythonButton.Click +=
-            (_, _) =>
-                BrowsePython();
-
-        var browseIconButton =
-            new Button
-            {
-                Text = "Browse...",
-                Width = DialogLayout.ActionButtonWidth
-            };
-
-        browseIconButton.Click +=
-            (_, _) =>
-                BrowseIcon();
-
-        var createButton =
-            new Button
-            {
-                Text = "Create Tool"
-            };
-
-        createButton.Click +=
-            (_, _) =>
-                TryAccept();
-
-        var cancelButton =
-            new Button
-            {
-                Text = "Cancel"
-            };
-
-        cancelButton.Click +=
-            (_, _) =>
-                Close(false);
-
-        DefaultButton =
-            createButton;
-
-        AbortButton =
-            cancelButton;
-
-        _moreOptions =
-            new Expander
-            {
-                Header =
-                    new Label
-                    {
-                        Text = "More options (tooltip, icon)"
-                    },
-
-                Expanded = false,
-
-                Content =
-                    new TableLayout
-                    {
-                        Padding =
-                            new Padding(0, 8, 0, 0),
-
-                        Spacing =
-                            new Size(12, 10),
-
-                        Rows =
-                        {
-                            DialogLayout.FormRow(
-                                "Tooltip",
-                                _tooltipTextArea),
-
-                            DialogLayout.FormRow(
-                                "Icon (.png)",
-                                DialogLayout.WithButton(
-                                    _iconPathTextBox,
-                                    browseIconButton))
-                        }
-                    }
-            };
-
-        _moreOptions.ExpandedChanged +=
-            (_, _) =>
-                DialogLayout.FitHeight(this);
-
-        Content =
+        var nameRow =
             new TableLayout
             {
-                Padding = 14,
-
                 Spacing =
-                    new Size(12, 10),
+                    new Size(Ui.Gap, 0),
 
                 Rows =
                 {
-                    DialogLayout.FormRow(
-                        "Python (.py)",
-                        DialogLayout.WithButton(
-                            _pythonPathTextBox,
-                            browsePythonButton)),
-
-                    DialogLayout.FormRow(
-                        "Tool name",
-                        _nameTextBox),
-
-                    DialogLayout.FormRow(
-                        "Category",
-                        _categoryComboBox),
-
                     new TableRow(
                         new TableCell(
-                            _moreOptions)),
-
-                    new TableRow(
-                        null,
+                            _iconTile),
 
                         new TableCell(
-                            DialogLayout.ButtonRow(
-                                createButton,
-                                cancelButton)))
+                            new FieldFrame(
+                                _nameTextBox),
+                            scaleWidth: true))
                 }
             };
+
+        SetBody(
+            Ui.Stack(
+                Ui.FieldGap,
+                _scriptPicker,
+                Ui.Field(
+                    "Name",
+                    nameRow),
+                Ui.Field(
+                    "Category",
+                    _categoryField),
+                Ui.Field(
+                    "Tooltip (optional)",
+                    new FieldFrame(
+                        _tooltipTextArea,
+                        multiline: true))));
+
+        AddCancelButton();
+
+        AddButton(
+            "Create tool",
+            TryAccept,
+            primary: true);
+
+        InitialFocus =
+            _scriptPicker;
     }
 
     private CreateToolRequest BuildRequest()
@@ -226,25 +141,23 @@ public sealed class CreateToolDialog : Dialog<bool>
                 .Trim(),
 
             Category =
-                DialogLayout.ReadCategory(
-                    _categoryComboBox),
+                _categoryField.Category,
 
             Tooltip =
-                _tooltipTextArea.Text
-                ?? string.Empty,
+                (_tooltipTextArea.Text
+                 ?? string.Empty)
+                .Trim(),
 
             Type =
                 "python3",
 
             SourcePythonPath =
-                (_pythonPathTextBox.Text
-                 ?? string.Empty)
-                .Trim(),
+                _scriptPicker.Path
+                ?? string.Empty,
 
             SourceIconPath =
-                (_iconPathTextBox.Text
-                 ?? string.Empty)
-                .Trim()
+                _iconPath
+                ?? string.Empty
         };
     }
 
@@ -254,7 +167,7 @@ public sealed class CreateToolDialog : Dialog<bool>
             new Eto.Forms.OpenFileDialog
             {
                 Title =
-                    "Select Rhino 8 Python Script",
+                    "Choose a Python script",
 
                 CheckFileExists = true,
 
@@ -268,20 +181,21 @@ public sealed class CreateToolDialog : Dialog<bool>
                 }
             };
 
-        var result =
-            dialog.ShowDialog(this);
-
-        if (result ==
+        if (dialog.ShowDialog(this) ==
             DialogResult.Cancel)
         {
             return;
         }
 
-        _pythonPathTextBox.Text =
+        _scriptPicker.Path =
             dialog.FileName;
+
+        ClearValidation();
 
         ApplySuggestions(
             dialog.FileName);
+
+        _nameTextBox.Focus();
     }
 
     /// <summary>
@@ -328,7 +242,7 @@ public sealed class CreateToolDialog : Dialog<bool>
             new Eto.Forms.OpenFileDialog
             {
                 Title =
-                    "Select Tool Icon",
+                    "Choose a tool icon",
 
                 CheckFileExists = true,
 
@@ -342,25 +256,38 @@ public sealed class CreateToolDialog : Dialog<bool>
                 }
             };
 
-        var result =
-            dialog.ShowDialog(this);
-
-        if (result ==
+        if (dialog.ShowDialog(this) ==
             DialogResult.Cancel)
         {
             return;
         }
 
-        _iconPathTextBox.Text =
-            dialog.FileName;
+        try
+        {
+            using var stream =
+                new MemoryStream(
+                    File.ReadAllBytes(
+                        dialog.FileName));
+
+            _iconTile.Image =
+                new Bitmap(stream);
+
+            _iconPath =
+                dialog.FileName;
+
+            ClearValidation();
+        }
+        catch
+        {
+            ShowValidation(
+                "That PNG could not be read.");
+        }
     }
 
     private void TryAccept()
     {
         var pythonPath =
-            (_pythonPathTextBox.Text
-             ?? string.Empty)
-            .Trim();
+            _scriptPicker.Path;
 
         if (string.IsNullOrWhiteSpace(
                 pythonPath)
@@ -368,8 +295,8 @@ public sealed class CreateToolDialog : Dialog<bool>
             !File.Exists(
                 pythonPath))
         {
-            ShowWarning(
-                "Select a valid .py file.");
+            ShowValidation(
+                "Choose a .py script first.");
 
             return;
         }
@@ -377,19 +304,20 @@ public sealed class CreateToolDialog : Dialog<bool>
         if (string.IsNullOrWhiteSpace(
                 _nameTextBox.Text))
         {
-            ShowWarning(
-                "Enter a tool name.");
+            ShowValidation(
+                "Give the tool a name.");
 
+            _nameTextBox.Focus();
             return;
         }
 
         if (string.IsNullOrWhiteSpace(
-                DialogLayout.ReadCategory(
-                    _categoryComboBox)))
+                _categoryField.Category))
         {
-            ShowWarning(
-                "Enter a category.");
+            ShowValidation(
+                "Pick or type a category.");
 
+            _categoryField.FocusInput();
             return;
         }
 
@@ -397,16 +325,5 @@ public sealed class CreateToolDialog : Dialog<bool>
             BuildRequest();
 
         Close(true);
-    }
-
-    private void ShowWarning(
-        string message)
-    {
-        MessageBox.Show(
-            this,
-            message,
-            "Shrike",
-            MessageBoxButtons.OK,
-            MessageBoxType.Warning);
     }
 }

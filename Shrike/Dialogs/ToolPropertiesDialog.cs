@@ -1,21 +1,23 @@
 using Eto.Drawing;
 using Eto.Forms;
+using Shrike.Controls;
 using Shrike.Models;
 using Shrike.Services;
 
 namespace Shrike.Dialogs;
 
 /// <summary>
-/// One place to customize a tool: name, category, tooltip, icon,
+/// One place to customize a tool: name, icon, category, tooltip,
 /// color, script, and version history.
 ///
 /// Field changes are only applied when the user clicks Save,
 /// which makes the result true. A rollback from Version History
 /// is applied right away and is reported by ScriptRolledBack.
 /// </summary>
-public sealed class ToolPropertiesDialog : Dialog<bool>
+public sealed class ToolPropertiesDialog : ShrikeDialog
 {
-    private const int IconPreviewSize = 32;
+    private const string DefaultToolIconResource =
+        "Shrike.Resources.DefaultToolIcon.png";
 
     private readonly ToolDefinition _tool;
 
@@ -23,17 +25,17 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
 
     private readonly TextBox _nameTextBox;
 
-    private readonly ComboBox _categoryComboBox;
+    private readonly CategoryField _categoryField;
 
     private readonly TextArea _tooltipTextArea;
 
-    private readonly ImageView _iconPreview;
+    private readonly IconTile _iconTile;
 
-    private readonly Label _iconLabel;
-
-    private readonly DropDown _colorDropDown;
+    private readonly SwatchPicker _swatchPicker;
 
     private readonly Label _scriptLabel;
+
+    private readonly Label _scriptDetailLabel;
 
     private readonly string? _initialColorHex;
 
@@ -43,8 +45,7 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
         .Trim();
 
     public string NewCategory =>
-        DialogLayout.ReadCategory(
-            _categoryComboBox);
+        _categoryField.Category;
 
     public string NewTooltip =>
         (_tooltipTextArea.Text
@@ -70,10 +71,7 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
     }
 
     public string? NewColorHex =>
-        _colorDropDown.SelectedIndex <= 0
-            ? null
-            : UserSettingsService.ColorPresets[
-                _colorDropDown.SelectedIndex - 1].Hex;
+        _swatchPicker.SelectedHex;
 
     public bool ColorChanged =>
         !string.Equals(
@@ -97,6 +95,12 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
         ToolManagementService managementService,
         string? currentIconPath,
         string? currentColorHex)
+        : base(
+            "Tool properties",
+            managementService.CanModify(tool)
+                ? "Changes are applied when you click Save."
+                : "This tool comes with Shrike, so only its color " +
+                  "can change. Duplicate it to edit a copy.")
     {
         _tool = tool;
         _managementService = managementService;
@@ -105,284 +109,168 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
         var canModify =
             managementService.CanModify(tool);
 
-        Title = $"Tool Properties - {tool.Name}";
-        Width = 560;
-        Resizable = false;
-
-        _nameTextBox =
-            new TextBox
+        _iconTile =
+            new IconTile
             {
-                Text = tool.Name,
+                Image =
+                    LoadIcon(currentIconPath)
+                    ?? EmbeddedImageLoader.LoadBitmap(
+                        DefaultToolIconResource),
+
                 Enabled = canModify
             };
 
-        _categoryComboBox =
-            DialogLayout.CategoryComboBox(
-                existingCategories,
-                tool.Category);
-
-        _categoryComboBox.Enabled =
-            canModify;
-
-        _tooltipTextArea =
-            new TextArea
-            {
-                Text = tool.Tooltip,
-                Height = 60,
-                Enabled = canModify
-            };
-
-        _iconPreview =
-            new ImageView
-            {
-                Size =
-                    new Size(
-                        IconPreviewSize,
-                        IconPreviewSize)
-            };
-
-        _iconLabel =
-            new Label
-            {
-                VerticalAlignment =
-                    VerticalAlignment.Center
-            };
-
-        ShowIcon(
-            currentIconPath,
-            string.IsNullOrWhiteSpace(currentIconPath)
-                ? "Default icon"
-                : Path.GetFileName(currentIconPath));
-
-        var changeIconButton =
-            new Button
-            {
-                Text = "Change...",
-                Width = DialogLayout.ActionButtonWidth,
-                Enabled = canModify
-            };
-
-        changeIconButton.Click +=
+        _iconTile.Click +=
             (_, _) =>
                 BrowseIcon();
 
-        _colorDropDown =
-            CreateColorDropDown(
+        _nameTextBox =
+            Ui.TextBox(
+                tool.Name);
+
+        _nameTextBox.ReadOnly =
+            !canModify;
+
+        _categoryField =
+            new CategoryField(
+                existingCategories,
+                tool.Category)
+            {
+                Enabled = canModify
+            };
+
+        _tooltipTextArea =
+            Ui.TextArea(
+                tool.Tooltip);
+
+        _tooltipTextArea.ReadOnly =
+            !canModify;
+
+        _swatchPicker =
+            new SwatchPicker(
+                UserSettingsService.ColorPresets,
                 currentColorHex);
 
         _scriptLabel =
             new Label
             {
-                VerticalAlignment =
-                    VerticalAlignment.Center
+                Font = Ui.StrongFont,
+                TextColor = Ui.Ink
             };
 
-        UpdateScriptLabel();
-
-        var replaceScriptButton =
-            new Button
+        _scriptDetailLabel =
+            new Label
             {
-                Text = "Replace...",
-                Width = DialogLayout.ActionButtonWidth,
-                Enabled = canModify
+                TextColor = Ui.Muted
             };
 
-        replaceScriptButton.Click +=
+        UpdateScriptLabels();
+
+        var replaceButton =
+            Ui.Button("Replace...");
+
+        replaceButton.Enabled =
+            canModify;
+
+        replaceButton.Click +=
             (_, _) =>
                 BrowseScript();
 
         var historyButton =
-            new Button
-            {
-                Text = "History...",
-                Width = DialogLayout.ActionButtonWidth,
-                Enabled = canModify
-            };
+            Ui.Button("History...");
+
+        historyButton.Enabled =
+            canModify;
 
         historyButton.Click +=
             (_, _) =>
                 ShowHistory();
 
-        var saveButton =
-            new Button
-            {
-                Text = "Save"
-            };
-
-        saveButton.Click +=
-            (_, _) =>
-                TryAccept();
-
-        var cancelButton =
-            new Button
-            {
-                Text = "Cancel"
-            };
-
-        cancelButton.Click +=
-            (_, _) =>
-                Close(false);
-
-        DefaultButton =
-            saveButton;
-
-        AbortButton =
-            cancelButton;
-
-        var iconRow =
+        var nameRow =
             new TableLayout
             {
                 Spacing =
-                    new Size(8, 0),
+                    new Size(Ui.Gap, 0),
 
                 Rows =
                 {
                     new TableRow(
                         new TableCell(
-                            _iconPreview),
+                            _iconTile),
 
                         new TableCell(
-                            _iconLabel,
-                            scaleWidth: true),
-
-                        new TableCell(
-                            changeIconButton))
+                            new FieldFrame(
+                                _nameTextBox),
+                            scaleWidth: true))
                 }
             };
 
-        var scriptRow =
-            new TableLayout
-            {
-                Spacing =
-                    new Size(8, 0),
-
-                Rows =
+        var scriptCard =
+            new Card(
+                new TableLayout
                 {
-                    new TableRow(
-                        new TableCell(
-                            _scriptLabel,
-                            scaleWidth: true),
+                    Spacing =
+                        new Size(8, 0),
 
-                        new TableCell(
-                            replaceScriptButton),
+                    Rows =
+                    {
+                        new TableRow(
+                            new TableCell(
+                                Ui.Stack(
+                                    2,
+                                    _scriptLabel,
+                                    _scriptDetailLabel),
+                                scaleWidth: true),
 
-                        new TableCell(
-                            historyButton))
-                }
-            };
+                            new TableCell(
+                                replaceButton),
 
-        var form =
-            new TableLayout
-            {
-                Padding = 14,
+                            new TableCell(
+                                historyButton))
+                    }
+                });
 
-                Spacing =
-                    new Size(12, 10)
-            };
+        SetBody(
+            Ui.Stack(
+                Ui.FieldGap,
+                Ui.Field(
+                    "Name",
+                    nameRow),
+                Ui.Field(
+                    "Category",
+                    _categoryField),
+                Ui.Field(
+                    "Tooltip",
+                    new FieldFrame(
+                        _tooltipTextArea,
+                        multiline: true)),
+                Ui.Field(
+                    "Color",
+                    _swatchPicker),
+                Ui.Field(
+                    "Script",
+                    scriptCard)));
 
-        if (!canModify)
-        {
-            form.Rows.Add(
-                new TableRow(
-                    null,
+        AddCancelButton();
 
-                    new TableCell(
-                        DialogLayout.HintLabel(
-                            "Bundled tool: only its color can be changed. " +
-                            "Duplicate it to customize a copy."))));
-        }
+        AddButton(
+            "Save",
+            TryAccept,
+            primary: true);
 
-        form.Rows.Add(
-            DialogLayout.FormRow(
-                "Name",
-                _nameTextBox));
-
-        form.Rows.Add(
-            DialogLayout.FormRow(
-                "Category",
-                _categoryComboBox));
-
-        form.Rows.Add(
-            DialogLayout.FormRow(
-                "Tooltip",
-                _tooltipTextArea));
-
-        form.Rows.Add(
-            DialogLayout.FormRow(
-                "Icon",
-                iconRow));
-
-        form.Rows.Add(
-            DialogLayout.FormRow(
-                "Color",
-                _colorDropDown));
-
-        form.Rows.Add(
-            DialogLayout.FormRow(
-                "Script",
-                scriptRow));
-
-        form.Rows.Add(
-            new TableRow(
-                null,
-
-                new TableCell(
-                    DialogLayout.ButtonRow(
-                        saveButton,
-                        cancelButton))));
-
-        Content =
-            form;
+        InitialFocus =
+            canModify
+                ? _nameTextBox
+                : _swatchPicker;
     }
 
-    private static DropDown CreateColorDropDown(
-        string? currentColorHex)
+    private static Image? LoadIcon(
+        string? iconPath)
     {
-        var dropDown =
-            new DropDown();
-
-        dropDown.Items.Add(
-            "Default");
-
-        var selectedIndex = 0;
-
-        for (var i = 0;
-             i < UserSettingsService.ColorPresets.Count;
-             i++)
-        {
-            var preset =
-                UserSettingsService.ColorPresets[i];
-
-            dropDown.Items.Add(
-                preset.Name);
-
-            if (string.Equals(
-                    preset.Hex,
-                    currentColorHex,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                selectedIndex = i + 1;
-            }
-        }
-
-        dropDown.SelectedIndex =
-            selectedIndex;
-
-        return dropDown;
-    }
-
-    private void ShowIcon(
-        string? iconPath,
-        string caption)
-    {
-        _iconLabel.Text =
-            caption;
-
         if (string.IsNullOrWhiteSpace(iconPath)
             || !File.Exists(iconPath))
         {
-            _iconPreview.Image = null;
-            return;
+            return null;
         }
 
         try
@@ -393,24 +281,29 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
                     File.ReadAllBytes(
                         iconPath));
 
-            _iconPreview.Image =
-                new Bitmap(stream);
+            return new Bitmap(stream);
         }
         catch
         {
-            _iconPreview.Image = null;
+            return null;
         }
     }
 
-    private void UpdateScriptLabel()
+    private void UpdateScriptLabels()
     {
         if (NewScriptPath is not null)
         {
             _scriptLabel.Text =
-                $"Replace with {Path.GetFileName(NewScriptPath)} on Save";
+                Path.GetFileName(NewScriptPath);
+
+            _scriptDetailLabel.Text =
+                $"Replaces {_tool.Entry} when you click Save";
 
             return;
         }
+
+        _scriptLabel.Text =
+            _tool.Entry;
 
         var versionCount =
             _managementService.CanModify(_tool)
@@ -419,12 +312,12 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
                     .Count
                 : 0;
 
-        _scriptLabel.Text =
+        _scriptDetailLabel.Text =
             versionCount switch
             {
-                0 => _tool.Entry,
-                1 => $"{_tool.Entry} · 1 saved version",
-                _ => $"{_tool.Entry} · {versionCount} saved versions"
+                0 => "No earlier versions yet",
+                1 => "1 earlier version saved",
+                _ => $"{versionCount} earlier versions saved"
             };
     }
 
@@ -434,7 +327,7 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
             new Eto.Forms.OpenFileDialog
             {
                 Title =
-                    "Select Tool Icon",
+                    "Choose a tool icon",
 
                 CheckFileExists = true,
 
@@ -454,12 +347,24 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
             return;
         }
 
+        var image =
+            LoadIcon(dialog.FileName);
+
+        if (image is null)
+        {
+            ShowValidation(
+                "That PNG could not be read.");
+
+            return;
+        }
+
+        ClearValidation();
+
         NewIconPath =
             dialog.FileName;
 
-        ShowIcon(
-            NewIconPath,
-            Path.GetFileName(NewIconPath));
+        _iconTile.Image =
+            image;
     }
 
     private void BrowseScript()
@@ -468,7 +373,7 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
             new Eto.Forms.OpenFileDialog
             {
                 Title =
-                    $"Replace Script - {_tool.Name}",
+                    $"Replace the script of {_tool.Name}",
 
                 CheckFileExists = true,
 
@@ -491,7 +396,7 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
         NewScriptPath =
             dialog.FileName;
 
-        UpdateScriptLabel();
+        UpdateScriptLabels();
     }
 
     private void ShowHistory()
@@ -505,7 +410,7 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
         if (dialog.ShowModal(this))
             ScriptRolledBack = true;
 
-        UpdateScriptLabel();
+        UpdateScriptLabels();
     }
 
     private void TryAccept()
@@ -513,26 +418,20 @@ public sealed class ToolPropertiesDialog : Dialog<bool>
         if (string.IsNullOrWhiteSpace(
                 NewName))
         {
-            MessageBox.Show(
-                this,
-                "Tool name cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Give the tool a name.");
 
+            _nameTextBox.Focus();
             return;
         }
 
         if (string.IsNullOrWhiteSpace(
                 NewCategory))
         {
-            MessageBox.Show(
-                this,
-                "Category cannot be empty.",
-                "Shrike",
-                MessageBoxButtons.OK,
-                MessageBoxType.Warning);
+            ShowValidation(
+                "Pick or type a category.");
 
+            _categoryField.FocusInput();
             return;
         }
 

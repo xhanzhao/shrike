@@ -135,6 +135,12 @@ public sealed class RoundedButton : Drawable
             Click?.Invoke(this, EventArgs.Empty);
     }
 
+    protected override void OnEnabledChanged(EventArgs e)
+    {
+        base.OnEnabledChanged(e);
+        Invalidate();
+    }
+
     protected override void OnGotFocus(EventArgs e)
     {
         base.OnGotFocus(e);
@@ -178,13 +184,22 @@ public sealed class RoundedButton : Drawable
         var fillColor =
             baseBackground;
 
+        // Dark fills (the primary button) lighten on hover,
+        // light fills darken.
+        var stateTint =
+            GetReadableTextColor(
+                baseBackground);
+
+        var isDarkFill =
+            stateTint == Colors.White;
+
         if (_hover)
         {
             fillColor =
                 Color.Blend(
                     baseBackground,
-                    Colors.Black,
-                    0.06f);
+                    stateTint,
+                    isDarkFill ? 0.14f : 0.06f);
         }
 
         if (_mouseDown)
@@ -192,8 +207,20 @@ public sealed class RoundedButton : Drawable
             fillColor =
                 Color.Blend(
                     baseBackground,
-                    Colors.Black,
-                    0.12f);
+                    stateTint,
+                    isDarkFill ? 0.26f : 0.12f);
+        }
+
+        // A disabled solid button fades toward the background,
+        // so it does not read as the active primary action.
+        if (!Enabled
+            && CustomBackgroundColor.HasValue)
+        {
+            fillColor =
+                Color.Blend(
+                    SystemColors.ControlBackground,
+                    baseBackground,
+                    0.25f);
         }
 
         var borderReference =

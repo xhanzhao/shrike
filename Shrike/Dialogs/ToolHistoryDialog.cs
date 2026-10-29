@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Eto.Drawing;
 using Eto.Forms;
+using Shrike.Controls;
 using Shrike.Models;
 using Shrike.Services;
 
@@ -12,8 +13,12 @@ namespace Shrike.Dialogs;
 ///
 /// Result is true when the script was rolled back.
 /// </summary>
-public sealed class ToolHistoryDialog : Dialog<bool>
+public sealed class ToolHistoryDialog : ShrikeDialog
 {
+    private const int ListWidth = 280;
+
+    private const int BodyHeight = 380;
+
     private readonly ToolDefinition _tool;
 
     private readonly ToolHistoryService _historyService;
@@ -26,9 +31,9 @@ public sealed class ToolHistoryDialog : Dialog<bool>
 
     private readonly TextBox _noteTextBox;
 
-    private readonly Button _saveNoteButton;
+    private readonly RoundedButton _saveNoteButton;
 
-    private readonly Button _rollbackButton;
+    private readonly RoundedButton _rollbackButton;
 
     private IReadOnlyList<ToolHistoryEntry> _entries =
         Array.Empty<ToolHistoryEntry>();
@@ -39,20 +44,20 @@ public sealed class ToolHistoryDialog : Dialog<bool>
         ToolDefinition tool,
         ToolHistoryService historyService,
         ToolManagementService managementService)
+        : base(
+            "Version history",
+            $"Earlier scripts of \"{tool.Name}\". Shrike saves one " +
+            "every time the script is replaced or rolled back.",
+            bodyWidth: 780)
     {
         _tool = tool;
         _historyService = historyService;
         _managementService = managementService;
 
-        Title = $"Version History - {tool.Name}";
-        Width = 820;
-        Height = 520;
-        Resizable = true;
-
         _versionList =
             new ListBox
             {
-                Width = 300
+                Width = ListWidth
             };
 
         _versionList.SelectedIndexChanged +=
@@ -64,68 +69,23 @@ public sealed class ToolHistoryDialog : Dialog<bool>
             {
                 ReadOnly = true,
                 Wrap = false,
-                Font = Fonts.Monospace(9)
+                Border = BorderType.None,
+                Font = Fonts.Monospace(9),
+                BackgroundColor = Ui.Surface,
+                TextColor = Ui.Ink
             };
 
         _noteTextBox =
-            new TextBox
-            {
-                PlaceholderText =
-                    "Optional note, e.g. \"added fillet radius\""
-            };
+            Ui.TextBox(
+                placeholder:
+                    "Add a note to this version, e.g. \"added fillet radius\"");
 
         _saveNoteButton =
-            new Button
-            {
-                Text = "Save Note"
-            };
+            Ui.Button("Save note");
 
         _saveNoteButton.Click +=
             (_, _) =>
                 SaveNote();
-
-        _rollbackButton =
-            new Button
-            {
-                Text = "Roll Back to This Version"
-            };
-
-        _rollbackButton.Click +=
-            (_, _) =>
-                RollbackToSelected();
-
-        var copyButton =
-            new Button
-            {
-                Text = "Copy Code"
-            };
-
-        copyButton.Click +=
-            (_, _) =>
-                CopySelectedCode();
-
-        var openFolderButton =
-            new Button
-            {
-                Text = "Open History Folder"
-            };
-
-        openFolderButton.Click +=
-            (_, _) =>
-                OpenHistoryFolder();
-
-        var closeButton =
-            new Button
-            {
-                Text = "Close"
-            };
-
-        closeButton.Click +=
-            (_, _) =>
-                Close(_rolledBack);
-
-        AbortButton =
-            closeButton;
 
         var noteRow =
             new TableLayout
@@ -137,7 +97,8 @@ public sealed class ToolHistoryDialog : Dialog<bool>
                 {
                     new TableRow(
                         new TableCell(
-                            _noteTextBox,
+                            new FieldFrame(
+                                _noteTextBox),
                             scaleWidth: true),
 
                         new TableCell(
@@ -149,75 +110,107 @@ public sealed class ToolHistoryDialog : Dialog<bool>
             new TableLayout
             {
                 Spacing =
-                    new Size(0, 8),
+                    new Size(0, Ui.Gap),
 
                 Rows =
                 {
                     new TableRow(
+                        Ui.FieldLabel(
+                            "Code")),
+
+                    new TableRow(
                         new TableCell(
-                            _previewTextArea,
+                            new FieldFrame(
+                                _previewTextArea,
+                                multiline: true),
                             scaleWidth: true))
                     {
                         ScaleHeight = true
                     },
+
+                    new TableRow(
+                        new Panel
+                        {
+                            Height = Ui.Gap
+                        }),
 
                     new TableRow(
                         noteRow)
                 }
             };
 
-        var buttonRow =
-            new StackLayout
+        var listColumn =
+            new TableLayout
             {
-                Orientation =
-                    Orientation.Horizontal,
+                Spacing =
+                    new Size(0, Ui.Gap),
 
-                Spacing = 8,
-
-                Items =
+                Rows =
                 {
-                    _rollbackButton,
-                    copyButton,
-                    openFolderButton,
+                    new TableRow(
+                        Ui.FieldLabel(
+                            "Versions")),
 
-                    new StackLayoutItem(
-                        null,
-                        expand: true),
-
-                    closeButton
+                    new TableRow(
+                        _versionList)
+                    {
+                        ScaleHeight = true
+                    }
                 }
             };
 
-        Content =
+        SetBody(
             new TableLayout
             {
-                Padding = 14,
+                Height = BodyHeight,
 
                 Spacing =
-                    new Size(12, 10),
+                    new Size(Ui.FieldGap, 0),
 
                 Rows =
                 {
                     new TableRow(
                         new TableCell(
-                            _versionList),
+                            listColumn),
 
                         new TableCell(
                             previewColumn,
                             scaleWidth: true))
-                    {
-                        ScaleHeight = true
-                    },
-
-                    new TableRow(
-                        null,
-
-                        new TableCell(
-                            buttonRow))
                 }
-            };
+            });
+
+        AddFooterAction(
+            "Copy code",
+            CopySelectedCode);
+
+        AddFooterAction(
+            "Open folder",
+            OpenHistoryFolder);
+
+        AddButton(
+            "Close",
+            Cancel);
+
+        _rollbackButton =
+            AddButton(
+                "Roll back to this version",
+                RollbackToSelected);
+
+        _rollbackButton.CustomBackgroundColor =
+            Ui.Ink;
+
+        _rollbackButton.TextFont =
+            Ui.StrongFont;
+
+        InitialFocus =
+            _versionList;
 
         LoadVersions();
+    }
+
+    protected override void Cancel()
+    {
+        Close(_rolledBack);
     }
 
     private bool IsCurrentSelected =>
@@ -342,10 +335,9 @@ public sealed class ToolHistoryDialog : Dialog<bool>
         }
         catch (Exception ex)
         {
-            ShowMessage(
-                "Shrike could not save the note.\n\n" +
-                ex.Message,
-                MessageBoxType.Error);
+            ShowValidation(
+                "The note could not be saved: " +
+                ex.Message);
 
             return;
         }
@@ -369,7 +361,7 @@ public sealed class ToolHistoryDialog : Dialog<bool>
                 $"{entry.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm}?\n\n" +
                 "The current script is saved to the history first, " +
                 "so this can be undone.",
-                "Roll Back",
+                "Roll back",
                 MessageBoxButtons.YesNo,
                 MessageBoxType.Question);
 
@@ -381,9 +373,8 @@ public sealed class ToolHistoryDialog : Dialog<bool>
                 entry,
                 out var error))
         {
-            ShowMessage(
-                error,
-                MessageBoxType.Error);
+            ShowValidation(
+                error);
 
             return;
         }
@@ -427,22 +418,9 @@ public sealed class ToolHistoryDialog : Dialog<bool>
         }
         catch (Exception ex)
         {
-            ShowMessage(
-                "Shrike could not open the history folder.\n\n" +
-                ex.Message,
-                MessageBoxType.Error);
+            ShowValidation(
+                "The history folder could not be opened: " +
+                ex.Message);
         }
-    }
-
-    private void ShowMessage(
-        string message,
-        MessageBoxType type)
-    {
-        MessageBox.Show(
-            this,
-            message,
-            "Shrike",
-            MessageBoxButtons.OK,
-            type);
     }
 }
