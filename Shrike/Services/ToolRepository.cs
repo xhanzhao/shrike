@@ -16,6 +16,11 @@ public sealed class ToolRepository
                 AllowTrailingCommas = true
             };
 
+    // The tool list reloads after every change, so the summary is
+    // only written when it says something new.
+    private int?
+        _lastLoggedCount;
+
     public string BundledToolsRoot =>
         ToolPathService.GetBundledToolsRoot();
 
@@ -47,14 +52,25 @@ public sealed class ToolRepository
                         tool.Name)
                 .ToList();
 
-        RhinoApp.WriteLine(
-            $"Shrike: loaded {ordered.Count} tool(s).");
+        if (_lastLoggedCount is null)
+        {
+            RhinoApp.WriteLine(
+                $"Shrike: loaded {ordered.Count} tool(s).");
 
-        RhinoApp.WriteLine(
-            $"Shrike bundled tools: {BundledToolsRoot}");
+            RhinoApp.WriteLine(
+                $"Shrike bundled tools: {BundledToolsRoot}");
 
-        RhinoApp.WriteLine(
-            $"Shrike user tools: {UserToolsRoot}");
+            RhinoApp.WriteLine(
+                $"Shrike user tools: {UserToolsRoot}");
+        }
+        else if (_lastLoggedCount != ordered.Count)
+        {
+            RhinoApp.WriteLine(
+                $"Shrike: loaded {ordered.Count} tool(s).");
+        }
+
+        _lastLoggedCount =
+            ordered.Count;
 
         return ordered;
     }

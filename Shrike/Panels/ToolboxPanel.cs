@@ -421,6 +421,8 @@ public sealed class ToolboxPanel : Panel
         _tools =
             _repository.LoadTools();
 
+        _watchService.IgnorePendingChanges();
+
         RebuildToolList();
     }
 

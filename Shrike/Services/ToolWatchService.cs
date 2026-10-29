@@ -23,6 +23,11 @@ public sealed class ToolWatchService : IDisposable
     private bool
         _disposed;
 
+    // File events from Shrike's own writes, which arrive after the
+    // panel has already reloaded, are dropped until this time.
+    private DateTime
+        _ignoreUntilUtc;
+
     public event EventHandler?
         ToolsChanged;
 
@@ -86,6 +91,28 @@ public sealed class ToolWatchService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Called after the panel reloads the tool list itself, so the
+    /// file events from the change it just made do not reload it
+    /// a second time.
+    /// </summary>
+    public void IgnorePendingChanges()
+    {
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                return;
+
+            _debounceTimer?.Change(
+                Timeout.Infinite,
+                Timeout.Infinite);
+
+            _ignoreUntilUtc =
+                DateTime.UtcNow.AddMilliseconds(
+                    DebounceMilliseconds);
+        }
+    }
+
     private void OnFileSystemChanged(
         object sender,
         FileSystemEventArgs e)
@@ -131,6 +158,9 @@ public sealed class ToolWatchService : IDisposable
         lock (_syncRoot)
         {
             if (_disposed)
+                return;
+
+            if (DateTime.UtcNow < _ignoreUntilUtc)
                 return;
 
             _debounceTimer ??=
