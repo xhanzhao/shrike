@@ -112,9 +112,16 @@ public sealed class ToolPackageService
                 type = "python3";
             }
 
-            if (IsPythonType(type)
-                &&
-                string.IsNullOrWhiteSpace(entry))
+            if (!IsPythonType(type))
+            {
+                error =
+                    $"This package is a '{type}' tool.\n\n" +
+                    "Shrike only supports Python 3 tools.";
+
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(entry))
             {
                 entry = "main.py";
             }
@@ -274,11 +281,6 @@ public sealed class ToolPackageService
                     manifest,
                     "type");
 
-            var command =
-                ReadString(
-                    manifest,
-                    "command");
-
             if (string.IsNullOrWhiteSpace(type))
             {
                 type = "python3";
@@ -308,19 +310,15 @@ public sealed class ToolPackageService
             }
             else if (IsMacroType(type))
             {
-                normalizedType = "macro";
-
-                if (string.IsNullOrWhiteSpace(command))
-                {
-                    return ToolCreationResult.Fail(
-                        "This Macro tool package does not contain a command.");
-                }
+                return ToolCreationResult.Fail(
+                    "This package is a Rhino Macro tool.\n\n" +
+                    "Shrike only supports Python 3 tools.");
             }
             else
             {
                 return ToolCreationResult.Fail(
                     $"Unsupported tool type: {type}\n\n" +
-                    "This Shrike build supports Python 3 and Rhino Macro tools.");
+                    "Shrike only supports Python 3 tools.");
             }
 
             SetCanonicalString(
@@ -344,28 +342,14 @@ public sealed class ToolPackageService
                 "type",
                 normalizedType);
 
-            if (normalizedType == "python3")
-            {
-                SetCanonicalString(
-                    manifest,
-                    "entry",
-                    entry);
+            SetCanonicalString(
+                manifest,
+                "entry",
+                entry);
 
-                RemoveCanonicalProperty(
-                    manifest,
-                    "command");
-            }
-            else
-            {
-                SetCanonicalString(
-                    manifest,
-                    "command",
-                    command);
-
-                RemoveCanonicalProperty(
-                    manifest,
-                    "entry");
-            }
+            RemoveCanonicalProperty(
+                manifest,
+                "command");
 
             // Preserve icon / tooltip if present, but normalize their
             // property casing as well.

@@ -6,16 +6,9 @@ namespace Shrike.Dialogs;
 
 public sealed class CreateToolDialog : Dialog<bool>
 {
-    private const int PythonDialogHeight = 350;
-    private const int MacroDialogHeight = 400;
-
-    private const int PythonInputHeight = 28;
-    private const int MacroInputHeight = 78;
+    private const int DialogHeight = 320;
 
     private const int InputActionButtonWidth = 80;
-
-    private readonly DropDown
-        _typeDropDown;
 
     private readonly TextBox
         _nameTextBox;
@@ -29,29 +22,8 @@ public sealed class CreateToolDialog : Dialog<bool>
     private readonly TextBox
         _pythonPathTextBox;
 
-    private readonly TextArea
-        _macroTextArea;
-
     private readonly TextBox
         _iconPathTextBox;
-
-    private readonly Label
-        _typeInputLabel;
-
-    private readonly Panel
-        _typeInputHost;
-
-    private readonly Control
-        _pythonInputControl;
-
-    private readonly Control
-        _macroInputControl;
-
-    public bool RecordMacroRequested
-    {
-        get;
-        private set;
-    }
 
     public CreateToolRequest? Request
     {
@@ -59,38 +31,12 @@ public sealed class CreateToolDialog : Dialog<bool>
         private set;
     }
 
-    private string SelectedToolType =>
-        _typeDropDown.SelectedIndex == 1
-            ? "macro"
-            : "python3";
-
-    public CreateToolRequest DraftRequest =>
-        BuildRequest();
-
-    public CreateToolDialog(
-        CreateToolRequest? initialRequest = null)
+    public CreateToolDialog()
     {
         Title = "Create New Tool";
         Width = 600;
-        Height = PythonDialogHeight;
+        Height = DialogHeight;
         Resizable = false;
-
-        _typeDropDown =
-            new DropDown();
-
-        _typeDropDown.Items.Add(
-            new ListItem
-            {
-                Text = "Python 3"
-            });
-
-        _typeDropDown.Items.Add(
-            new ListItem
-            {
-                Text = "Rhino Macro"
-            });
-
-        _typeDropDown.SelectedIndex = 0;
 
         _nameTextBox =
             new TextBox
@@ -117,12 +63,6 @@ public sealed class CreateToolDialog : Dialog<bool>
                 ReadOnly = true,
                 PlaceholderText =
                     "Select a Rhino 8 Python file..."
-            };
-
-        _macroTextArea =
-            new TextArea
-            {
-                Height = 70
             };
 
         _iconPathTextBox =
@@ -155,18 +95,7 @@ public sealed class CreateToolDialog : Dialog<bool>
             (_, _) =>
                 BrowseIcon();
 
-        var recordMacroButton =
-            new Button
-            {
-                Text = "Record",
-                Width = InputActionButtonWidth
-            };
-
-        recordMacroButton.Click +=
-            (_, _) =>
-                RequestMacroRecording();
-
-        _pythonInputControl =
+        var pythonInput =
             new TableLayout
             {
                 Spacing =
@@ -182,52 +111,6 @@ public sealed class CreateToolDialog : Dialog<bool>
                         new TableCell(
                             browsePythonButton))
                 }
-            };
-
-        _macroInputControl =
-            new TableLayout
-            {
-                Spacing =
-                    new Size(8, 0),
-
-                Rows =
-                {
-                    new TableRow(
-                        new TableCell(
-                            _macroTextArea,
-                            scaleWidth: true),
-
-                        new TableCell(
-                            new StackLayout
-                            {
-                                Orientation =
-                                    Orientation.Vertical,
-
-                                VerticalContentAlignment =
-                                    VerticalAlignment.Center,
-
-                                Items =
-                                {
-                                    recordMacroButton
-                                }
-                            }))
-                }
-            };
-
-        _typeInputLabel =
-            new Label
-            {
-                Text = "Python (.py)"
-            };
-
-        _typeInputHost =
-            new Panel
-            {
-                Height =
-                    PythonInputHeight,
-
-                Content =
-                    _pythonInputControl
             };
 
         var iconInput =
@@ -285,10 +168,6 @@ public sealed class CreateToolDialog : Dialog<bool>
                 Rows =
                 {
                     CreateFormRow(
-                        "Tool Type",
-                        _typeDropDown),
-
-                    CreateFormRow(
                         "Tool name",
                         _nameTextBox),
 
@@ -296,13 +175,9 @@ public sealed class CreateToolDialog : Dialog<bool>
                         "Category",
                         _categoryTextBox),
 
-                    new TableRow(
-                        new TableCell(
-                            _typeInputLabel),
-
-                        new TableCell(
-                            _typeInputHost,
-                            scaleWidth: true)),
+                    CreateFormRow(
+                        "Python (.py)",
+                        pythonInput),
 
                     CreateFormRow(
                         "Icon (.png)",
@@ -335,14 +210,6 @@ public sealed class CreateToolDialog : Dialog<bool>
         Content =
             form;
 
-        ApplyInitialRequest(
-            initialRequest);
-
-        _typeDropDown.SelectedIndexChanged +=
-            (_, _) =>
-                UpdateToolTypeUi();
-
-        UpdateToolTypeUi();
     }
 
     private static TableRow CreateFormRow(
@@ -360,93 +227,6 @@ public sealed class CreateToolDialog : Dialog<bool>
             new TableCell(
                 control,
                 scaleWidth: true));
-    }
-
-    private void UpdateToolTypeUi()
-    {
-        var isPython =
-            string.Equals(
-                SelectedToolType,
-                "python3",
-                StringComparison.OrdinalIgnoreCase);
-
-        if (isPython)
-        {
-            _typeInputLabel.Text =
-                "Python (.py)";
-
-            _typeInputHost.Height =
-                PythonInputHeight;
-
-            _typeInputHost.Content =
-                _pythonInputControl;
-
-            Height =
-                PythonDialogHeight;
-        }
-        else
-        {
-            _typeInputLabel.Text =
-                "Macro";
-
-            _typeInputHost.Height =
-                MacroInputHeight;
-
-            _typeInputHost.Content =
-                _macroInputControl;
-
-            Height =
-                MacroDialogHeight;
-        }
-
-        _typeInputHost.Invalidate();
-        Invalidate();
-    }
-
-    private void ApplyInitialRequest(
-        CreateToolRequest? initialRequest)
-    {
-        if (initialRequest is null)
-            return;
-
-        _typeDropDown.SelectedIndex =
-            string.Equals(
-                initialRequest.Type,
-                "macro",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            string.Equals(
-                initialRequest.Type,
-                "rhino-macro",
-                StringComparison.OrdinalIgnoreCase)
-                ? 1
-                : 0;
-
-        _nameTextBox.Text =
-            initialRequest.Name
-            ?? string.Empty;
-
-        _categoryTextBox.Text =
-            string.IsNullOrWhiteSpace(
-                initialRequest.Category)
-                ? "Utility"
-                : initialRequest.Category;
-
-        _tooltipTextArea.Text =
-            initialRequest.Tooltip
-            ?? string.Empty;
-
-        _pythonPathTextBox.Text =
-            initialRequest.SourcePythonPath
-            ?? string.Empty;
-
-        _macroTextArea.Text =
-            initialRequest.Macro
-            ?? string.Empty;
-
-        _iconPathTextBox.Text =
-            initialRequest.SourceIconPath
-            ?? string.Empty;
     }
 
     private CreateToolRequest BuildRequest()
@@ -468,15 +248,10 @@ public sealed class CreateToolDialog : Dialog<bool>
                 ?? string.Empty,
 
             Type =
-                SelectedToolType,
+                "python3",
 
             SourcePythonPath =
                 (_pythonPathTextBox.Text
-                 ?? string.Empty)
-                .Trim(),
-
-            Macro =
-                (_macroTextArea.Text
                  ?? string.Empty)
                 .Trim(),
 
@@ -485,24 +260,6 @@ public sealed class CreateToolDialog : Dialog<bool>
                  ?? string.Empty)
                 .Trim()
         };
-    }
-
-    private void RequestMacroRecording()
-    {
-        if (!string.Equals(
-                SelectedToolType,
-                "macro",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        RecordMacroRequested = true;
-
-        // Close the modal dialog so Rhino becomes interactive again.
-        // ToolboxPanel will start recording and reopen this dialog
-        // with the recorded macro after Stop is clicked.
-        Close(false);
     }
 
     private void BrowsePython()
@@ -609,46 +366,21 @@ public sealed class CreateToolDialog : Dialog<bool>
             return;
         }
 
-        var type =
-            SelectedToolType;
-
         var pythonPath =
             (_pythonPathTextBox.Text
              ?? string.Empty)
             .Trim();
 
-        var macro =
-            (_macroTextArea.Text
-             ?? string.Empty)
-            .Trim();
-
-        if (string.Equals(
-                type,
-                "python3",
-                StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(
+                pythonPath)
+            ||
+            !File.Exists(
+                pythonPath))
         {
-            if (string.IsNullOrWhiteSpace(
-                    pythonPath)
-                ||
-                !File.Exists(
-                    pythonPath))
-            {
-                ShowWarning(
-                    "Select a valid .py file.");
+            ShowWarning(
+                "Select a valid .py file.");
 
-                return;
-            }
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(
-                    macro))
-            {
-                ShowWarning(
-                    "Enter a Rhino macro.");
-
-                return;
-            }
+            return;
         }
 
         Request =

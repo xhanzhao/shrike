@@ -250,19 +250,10 @@ public sealed class ToolRepository
         if (IsMacroTool(
                 tool))
         {
-            if (string.IsNullOrWhiteSpace(
-                    tool.Command))
-            {
-                error =
-                    "Macro tool has no command.";
-
-                return false;
-            }
-
             error =
-                string.Empty;
+                "Rhino Macro tools are no longer supported.";
 
-            return true;
+            return false;
         }
 
         error =

@@ -57,16 +57,11 @@ public sealed class ImportToolDialog : Dialog<bool>
         DefaultButton = importButton;
         AbortButton = cancelButton;
 
-        var typeText =
-            IsMacroType(packageInfo.Type)
-                ? "Rhino Macro"
-                : "Python 3";
-
         var infoLabel =
             new Label
             {
                 Text =
-                    $"Type: {typeText}"
+                    "Type: Python 3"
             };
 
         var layout =
@@ -94,20 +89,6 @@ public sealed class ImportToolDialog : Dialog<bool>
             cancelButton);
 
         Content = layout;
-    }
-
-    private static bool IsMacroType(
-        string type)
-    {
-        return string.Equals(
-                   type,
-                   "macro",
-                   StringComparison.OrdinalIgnoreCase)
-               ||
-               string.Equals(
-                   type,
-                   "rhino-macro",
-                   StringComparison.OrdinalIgnoreCase);
     }
 
     private void TryAccept()

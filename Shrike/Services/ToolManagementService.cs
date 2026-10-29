@@ -388,58 +388,6 @@ public sealed class ToolManagementService
         }
     }
 
-    public bool UpdateMacro(
-        ToolDefinition tool,
-        string macro,
-        out string error)
-    {
-        error = string.Empty;
-
-        if (!CanModify(tool))
-        {
-            error =
-                "Bundled tools are read-only. " +
-                "Only user-created Macro tools can be edited.";
-
-            return false;
-        }
-
-        if (!IsMacroTool(tool))
-        {
-            error = "This tool is not a Rhino Macro tool.";
-            return false;
-        }
-
-        macro = (macro ?? string.Empty).Trim();
-
-        if (string.IsNullOrWhiteSpace(macro))
-        {
-            error = "Macro cannot be empty.";
-            return false;
-        }
-
-        try
-        {
-            tool.Command = macro;
-            SaveManifest(tool);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            error =
-                "Shrike could not save the Macro.\n\n" +
-                ex.Message;
-
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Duplicates either a bundled or user-created tool.
-    ///
-    /// The duplicate is ALWAYS written to:
-    /// Documents\Shrike\Tools
-    /// </summary>
     public ToolCreationResult DuplicateTool(
         ToolDefinition sourceTool,
         string newName,
@@ -1108,20 +1056,6 @@ public sealed class ToolManagementService
             get;
             set;
         }
-    }
-
-    private static bool IsMacroTool(
-        ToolDefinition tool)
-    {
-        return string.Equals(
-                   tool.Type,
-                   "macro",
-                   StringComparison.OrdinalIgnoreCase)
-               ||
-               string.Equals(
-                   tool.Type,
-                   "rhino-macro",
-                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static string PreparePython3Script(
