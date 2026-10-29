@@ -65,10 +65,6 @@
 	  <EmbeddedResource Include="Resources\DefaultToolIcon.png"
 						LogicalName="Shrike.Resources.DefaultToolIcon.png" />
 
-	  <None Remove="Resources\DefaultMacroIcon.png" />
-	  <EmbeddedResource Include="Resources\DefaultMacroIcon.png"
-						LogicalName="Shrike.Resources.DefaultMacroIcon.png" />
-
 	  <None Remove="Resources\PanelOptionsIcon.png" />
 	  <EmbeddedResource Include="Resources\PanelOptionsIcon.png"
 						LogicalName="Shrike.Resources.PanelOptionsIcon.png" />

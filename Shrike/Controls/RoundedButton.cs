@@ -213,8 +213,8 @@ public sealed class RoundedButton : Drawable
             borderColor =
                 Color.Blend(
                     borderColor,
-                    SystemColors.Highlight,
-                    0.38f);
+                    SystemColors.ControlText,
+                    0.45f);
         }
 
         DrawUniformRoundedBorder(

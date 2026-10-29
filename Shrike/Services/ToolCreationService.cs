@@ -11,8 +11,7 @@ public sealed class ToolCreationService
     private const string DefaultToolIconResource =
         "Shrike.Resources.DefaultToolIcon.png";
 
-    private const string DefaultMacroIconResource =
-        "Shrike.Resources.DefaultMacroIcon.png";
+    private readonly ToolHistoryService _historyService = new();
 
     private readonly JsonSerializerOptions _jsonOptions =
         new()
@@ -44,32 +43,23 @@ public sealed class ToolCreationService
                 $"Unsupported tool type: {request.Type}");
         }
 
-        if (type == "python3")
-        {
-            if (string.IsNullOrWhiteSpace(
-                    request.SourcePythonPath)
-                || !File.Exists(
-                    request.SourcePythonPath))
-            {
-                return ToolCreationResult.Fail(
-                    "Select a valid .py file.");
-            }
-
-            if (!string.Equals(
-                    Path.GetExtension(
-                        request.SourcePythonPath),
-                    ".py",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return ToolCreationResult.Fail(
-                    "The source file must be a .py file.");
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(
-                     request.Macro))
+        if (string.IsNullOrWhiteSpace(
+                request.SourcePythonPath)
+            || !File.Exists(
+                request.SourcePythonPath))
         {
             return ToolCreationResult.Fail(
-                "Enter a Rhino macro.");
+                "Select a valid .py file.");
+        }
+
+        if (!string.Equals(
+                Path.GetExtension(
+                    request.SourcePythonPath),
+                ".py",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return ToolCreationResult.Fail(
+                "The source file must be a .py file.");
         }
 
         var categoryFolder =
@@ -109,8 +99,7 @@ public sealed class ToolCreationService
             var iconFileName =
                 CreateToolIcon(
                     request.SourceIconPath,
-                    destination,
-                    type);
+                    destination);
 
             var manifest =
                 new Dictionary<string, object?>
@@ -120,27 +109,24 @@ public sealed class ToolCreationService
                     ["category"] = request.Category.Trim(),
                     ["type"] = type,
                     ["icon"] = iconFileName,
-                    ["tooltip"] = request.Tooltip.Trim()
+                    ["tooltip"] = request.Tooltip.Trim(),
+                    ["entry"] = "main.py"
                 };
 
-            if (type == "python3")
-            {
-                var mainPyPath =
-                    Path.Combine(
-                        destination,
-                        "main.py");
+            var mainPyPath =
+                Path.Combine(
+                    destination,
+                    "main.py");
 
-                CopyPython3Script(
-                    request.SourcePythonPath,
-                    mainPyPath);
+            CopyPython3Script(
+                request.SourcePythonPath,
+                mainPyPath);
 
-                manifest["entry"] = "main.py";
-            }
-            else
-            {
-                manifest["command"] =
-                    request.Macro.Trim();
-            }
+            // The first entry in the version history.
+            _historyService.Snapshot(
+                destination,
+                mainPyPath,
+                ToolHistoryReason.Created);
 
             var manifestPath =
                 Path.Combine(
@@ -198,19 +184,6 @@ public sealed class ToolCreationService
             return "python3";
         }
 
-        if (string.Equals(
-                value,
-                "macro",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            string.Equals(
-                value,
-                "rhino-macro",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return "macro";
-        }
-
         return null;
     }
 
@@ -252,15 +225,14 @@ public sealed class ToolCreationService
 
     private static string CreateToolIcon(
     string sourceIconPath,
-    string destination,
-    string toolType)
+    string destination)
     {
         var target =
             Path.Combine(
                 destination,
                 "icon.png");
 
-        // 用户自己选择 Icon 时优先使用。
+        // A user-selected icon always wins.
         if (!string.IsNullOrWhiteSpace(sourceIconPath))
         {
             if (!File.Exists(sourceIconPath))
@@ -287,14 +259,9 @@ public sealed class ToolCreationService
             return "icon.png";
         }
 
-        // 没选 Icon 时根据 Tool Type 使用默认 Icon。
+        // Without a selected icon, use the default tool icon.
         var resourceName =
-            string.Equals(
-                toolType,
-                "macro",
-                StringComparison.OrdinalIgnoreCase)
-                ? DefaultMacroIconResource
-                : DefaultToolIconResource;
+            DefaultToolIconResource;
 
         var assembly =
             Assembly.GetExecutingAssembly();

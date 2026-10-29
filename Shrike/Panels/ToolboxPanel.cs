@@ -43,14 +43,9 @@ public sealed class ToolboxPanel : Panel
     private readonly ToolPackageService _packageService;
     private readonly UserSettingsService _settingsService;
     private readonly ToolWatchService _watchService;
-    private readonly MacroRecorderService _macroRecorderService;
 
     private readonly TextBox _searchBox;
     private readonly StackLayout _toolList;
-    private readonly Panel _recordingBar;
-
-    private CreateToolRequest?
-        _macroRecordingDraft;
 
     private readonly Dictionary<string, bool>
         _categoryExpandedStates =
@@ -86,9 +81,6 @@ public sealed class ToolboxPanel : Panel
 
         _watchService.ToolsChanged +=
             OnWatchedToolsChanged;
-
-        _macroRecorderService =
-            new MacroRecorderService();
 
         _searchBox =
             new TextBox
@@ -177,55 +169,6 @@ public sealed class ToolboxPanel : Panel
                 }
             };
 
-        var stopRecordingButton =
-            new Button
-            {
-                Text = "Stop",
-                Width = 62
-            };
-
-        stopRecordingButton.Click +=
-            (_, _) =>
-                StopMacroRecording();
-
-        _recordingBar =
-            new Panel
-            {
-                Visible = false,
-
-                Padding =
-                    new Padding(
-                        left: 8,
-                        top: 4,
-                        right: 4,
-                        bottom: 4),
-
-                Content =
-                    new StackLayout
-                    {
-                        Orientation =
-                            Orientation.Horizontal,
-
-                        Spacing = 8,
-
-                        VerticalContentAlignment =
-                            VerticalAlignment.Center,
-
-                        Items =
-                        {
-                            new StackLayoutItem(
-                                new Label
-                                {
-                                    Text =
-                                        "● Recording Macro..."
-                                },
-                                expand: true),
-
-                            stopRecordingButton
-                        }
-                    }
-            };
-
         _toolList =
             new StackLayout
             {
@@ -273,8 +216,6 @@ public sealed class ToolboxPanel : Panel
                 Items =
                 {
                     header,
-
-                    _recordingBar,
 
                     new StackLayoutItem(
                         scrollable,
@@ -467,32 +408,13 @@ public sealed class ToolboxPanel : Panel
         RebuildToolList();
     }
 
-    private void CreateNewTool(
-        CreateToolRequest? initialRequest = null)
+    private void CreateNewTool()
     {
-        if (_macroRecorderService.IsRecording)
-        {
-            ShowError(
-                "Shrike is currently recording a Macro.\n\n" +
-                "Stop the recording before creating another tool.");
-
-            return;
-        }
-
         var dialog =
-            new CreateToolDialog(
-                initialRequest);
+            new CreateToolDialog();
 
         var accepted =
             ShowDialog(dialog);
-
-        if (dialog.RecordMacroRequested)
-        {
-            StartMacroRecording(
-                dialog.DraftRequest);
-
-            return;
-        }
 
         if (!accepted
             ||
@@ -522,107 +444,6 @@ public sealed class ToolboxPanel : Panel
             "Shrike",
             MessageBoxButtons.OK,
             MessageBoxType.Information);
-    }
-
-    private void StartMacroRecording(
-        CreateToolRequest draft)
-    {
-        if (_macroRecorderService.IsRecording)
-            return;
-
-        draft.Type =
-            "macro";
-
-        _macroRecordingDraft =
-            draft;
-
-        _macroRecorderService.Start();
-
-        _recordingBar.Visible =
-            true;
-
-        RhinoApp.WriteLine(
-            "Shrike Macro Recorder is recording. " +
-            "Run Rhino commands, then click Stop in the Shrike panel.");
-
-        RhinoApp.SetFocusToMainWindow();
-    }
-
-    private void StopMacroRecording()
-    {
-        if (!_macroRecorderService.IsRecording)
-            return;
-
-        var recordedMacro =
-            _macroRecorderService.Stop();
-
-        _recordingBar.Visible =
-            false;
-
-        var draft =
-            _macroRecordingDraft
-            ??
-            new CreateToolRequest
-            {
-                Type = "macro",
-                Category = "Utility"
-            };
-
-        _macroRecordingDraft =
-            null;
-
-        if (!string.IsNullOrWhiteSpace(
-                recordedMacro))
-        {
-            draft.Macro =
-                AppendRecordedMacro(
-                    draft.Macro,
-                    recordedMacro);
-        }
-
-        if (string.IsNullOrWhiteSpace(
-                recordedMacro))
-        {
-            RhinoApp.WriteLine(
-                "Shrike Macro Recorder: no completed commands were recorded.");
-        }
-
-        // Reopen Create New Tool with all previous values preserved
-        // and the recorded commands filled into the Macro field.
-        CreateNewTool(
-            draft);
-    }
-
-    private static string AppendRecordedMacro(
-        string existingMacro,
-        string recordedMacro)
-    {
-        var existing =
-            (existingMacro
-             ?? string.Empty)
-            .Trim();
-
-        var recorded =
-            (recordedMacro
-             ?? string.Empty)
-            .Trim();
-
-        if (string.IsNullOrWhiteSpace(
-                existing))
-        {
-            return recorded;
-        }
-
-        if (string.IsNullOrWhiteSpace(
-                recorded))
-        {
-            return existing;
-        }
-
-        return
-            existing +
-            Environment.NewLine +
-            recorded;
     }
 
     private void ImportTool()
@@ -769,69 +590,6 @@ public sealed class ToolboxPanel : Panel
         }
     }
 
-    private void EditToolMacro(
-        ToolDefinition tool)
-    {
-        if (!IsMacroTool(tool))
-            return;
-
-        if (!_managementService.CanModify(tool))
-        {
-            ShowReadOnlyMessage();
-            return;
-        }
-
-        var dialog =
-            new EditMacroDialog(
-                tool.Name,
-                tool.Command,
-                TestRunMacro);
-
-        var accepted =
-            ShowDialog(dialog);
-
-        if (!accepted)
-            return;
-
-        if (!_managementService.UpdateMacro(
-                tool,
-                dialog.Macro,
-                out var error))
-        {
-            ShowError(error);
-            return;
-        }
-
-        ReloadTools();
-    }
-
-    private void TestRunMacro(
-        string macro)
-    {
-        if (string.IsNullOrWhiteSpace(macro))
-            return;
-
-        try
-        {
-            var success =
-                RhinoApp.RunScript(
-                    macro,
-                    echo: false);
-
-            if (!success)
-            {
-                ShowError(
-                    "Rhino could not complete the Macro test run.");
-            }
-        }
-        catch (Exception ex)
-        {
-            ShowError(
-                "Shrike could not test the Macro.\n\n" +
-                ex.Message);
-        }
-    }
-
     private void ReplaceToolScript(
         ToolDefinition tool)
     {
@@ -874,7 +632,8 @@ public sealed class ToolboxPanel : Panel
         var confirmation =
             MessageBox.Show(
                 $"Replace the current script for \"{tool.Name}\"?\n\n" +
-                "The existing script will be overwritten.",
+                "The current script is saved to Version History, " +
+                "so you can roll back.",
                 "Replace Script",
                 MessageBoxButtons.YesNo,
                 MessageBoxType.Warning);
@@ -899,6 +658,21 @@ public sealed class ToolboxPanel : Panel
             "Shrike",
             MessageBoxButtons.OK,
             MessageBoxType.Information);
+    }
+
+    private void ShowVersionHistory(
+        ToolDefinition tool)
+    {
+        if (!IsPythonTool(tool))
+            return;
+
+        var dialog =
+            new ToolHistoryDialog(
+                tool,
+                _managementService.History,
+                _managementService);
+
+        ShowDialog(dialog);
     }
 
     private void DuplicateTool(
@@ -1411,23 +1185,20 @@ public sealed class ToolboxPanel : Panel
                     ReplaceToolScript(tool);
 
             menu.Items.Add(replaceScriptItem);
-        }
 
-        if (IsMacroTool(tool))
-        {
-            var editMacroItem =
+            var historyItem =
                 new ButtonMenuItem
                 {
-                    Text = "Edit Macro",
+                    Text = "Version History...",
                     Enabled =
                         _managementService.CanModify(tool)
                 };
 
-            editMacroItem.Click +=
+            historyItem.Click +=
                 (_, _) =>
-                    EditToolMacro(tool);
+                    ShowVersionHistory(tool);
 
-            menu.Items.Add(editMacroItem);
+            menu.Items.Add(historyItem);
         }
 
         var openFolderItem =
@@ -1654,63 +1425,36 @@ public sealed class ToolboxPanel : Panel
                 presetItem);
         }
 
-        parent.Items.Add(
-            new SeparatorMenuItem());
-
-        var customItem =
-            new ButtonMenuItem
-            {
-                Text = "Custom..."
-            };
-
-        customItem.Click +=
-            (_, _) =>
-            {
-                var initialColor =
-                    TryParseUiColor(
-                        currentColorHex,
-                        out var parsed)
-                        ? parsed
-                        : SystemColors.ControlBackground;
-
-                var dialog =
-                    new ColorDialog
-                    {
-                        Color = initialColor
-                    };
-
-                var result =
-                    dialog.ShowDialog(
-                        this);
-
-                if (result !=
-                    DialogResult.Ok)
-                {
-                    return;
-                }
-
-                applyColor(
-                    ToColorHex(
-                        dialog.Color));
-            };
-
-        parent.Items.Add(
-            customItem);
     }
 
     private static IReadOnlyList<(string Name, string Hex)>
         GetColorPresets()
     {
+        // The panel is black and white, so tool and category
+        // highlights are shades of gray only.
         return new (string Name, string Hex)[]
         {
-            ("Red", "#F8DEDE"),
-            ("Orange", "#F7E6D2"),
-            ("Yellow", "#F8F1C9"),
-            ("Green", "#DDEEDF"),
-            ("Blue", "#DDEAF7"),
-            ("Purple", "#E8DFF2"),
-            ("Gray", "#E5E7EA")
+            ("Light Gray", "#F0F0F0"),
+            ("Gray", "#D9D9D9"),
+            ("Mid Gray", "#A6A6A6"),
+            ("Dark Gray", "#595959"),
+            ("Black", "#1F1F1F")
         };
+    }
+
+    private static Color ToGray(
+        Color color)
+    {
+        var luminance =
+            0.299f * color.R
+            + 0.587f * color.G
+            + 0.114f * color.B;
+
+        return new Color(
+            luminance,
+            luminance,
+            luminance,
+            color.A);
     }
 
     private static bool TryParseUiColor(
@@ -1724,6 +1468,10 @@ public sealed class ToolboxPanel : Panel
                 colorHex,
                 out color))
         {
+            // Colors saved by older versions are shown as gray.
+            color =
+                ToGray(color);
+
             return true;
         }
 
@@ -1733,12 +1481,6 @@ public sealed class ToolboxPanel : Panel
         return false;
     }
 
-    private static string ToColorHex(
-        Color color)
-    {
-        return
-            $"#{color.Rb:X2}{color.Gb:X2}{color.Bb:X2}";
-    }
 
     private void RebuildToolList()
     {
@@ -1916,20 +1658,6 @@ public sealed class ToolboxPanel : Panel
                string.Equals(
                    tool.Type,
                    "python",
-                   StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsMacroTool(
-        ToolDefinition tool)
-    {
-        return string.Equals(
-                   tool.Type,
-                   "macro",
-                   StringComparison.OrdinalIgnoreCase)
-               ||
-               string.Equals(
-                   tool.Type,
-                   "rhino-macro",
                    StringComparison.OrdinalIgnoreCase);
     }
 

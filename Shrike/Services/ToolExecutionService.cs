@@ -13,8 +13,7 @@ public sealed class ToolExecutionService
         _runners =
             new IToolRunner[]
             {
-                new Python3ToolRunner(),
-                new MacroToolRunner()
+                new Python3ToolRunner()
             };
     }
 

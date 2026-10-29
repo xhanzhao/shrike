@@ -90,6 +90,13 @@ public sealed class ToolWatchService : IDisposable
         object sender,
         FileSystemEventArgs e)
     {
+        // Writing version history must not reload the tool list.
+        if (ToolHistoryService.IsInternalPath(
+                e.FullPath))
+        {
+            return;
+        }
+
         ScheduleNotification();
     }
 
@@ -97,6 +104,15 @@ public sealed class ToolWatchService : IDisposable
         object sender,
         RenamedEventArgs e)
     {
+        if (ToolHistoryService.IsInternalPath(
+                e.FullPath)
+            &&
+            ToolHistoryService.IsInternalPath(
+                e.OldFullPath))
+        {
+            return;
+        }
+
         ScheduleNotification();
     }
 
