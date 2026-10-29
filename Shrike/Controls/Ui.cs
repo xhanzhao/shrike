@@ -49,6 +49,13 @@ internal static class Ui
             Ink,
             0.18f);
 
+    /// <summary>Highlighted row in a list.</summary>
+    public static Color Hover =>
+        Color.Blend(
+            Surface,
+            Ink,
+            0.07f);
+
     /// <summary>Hover state of borders.</summary>
     public static Color RuleStrong =>
         Color.Blend(

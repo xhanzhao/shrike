@@ -22,7 +22,9 @@ public sealed class FieldFrame : Drawable
         Padding =
             multiline
                 ? new Padding(8, 6)
-                : new Padding(8, 0);
+                // Keep content 2px inside so it never paints
+                // over the 1px border.
+                : new Padding(8, 2);
 
         if (!multiline)
             Height = Ui.FieldHeight;

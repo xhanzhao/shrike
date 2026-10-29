@@ -64,7 +64,7 @@ public sealed class CategoryField : Panel
             new ChevronButton
             {
                 Width = 22,
-                Height = Ui.FieldHeight - 2,
+                Height = Ui.FieldHeight - 6,
                 Enabled = _categories.Count > 0,
                 ToolTip = "Existing categories"
             };
@@ -106,44 +106,21 @@ public sealed class CategoryField : Panel
     private void ShowMenu(
         Control anchor)
     {
-        var menu =
-            new ContextMenu();
+        var popup =
+            new ChoicePopup(
+                _categories,
+                Category,
+                anchor.Width);
 
-        var current =
-            Category;
+        popup.Picked +=
+            (_, picked) =>
+            {
+                _textBox.Text = picked;
+                _textBox.Focus();
+            };
 
-        foreach (var category in _categories)
-        {
-            var item =
-                new CheckMenuItem
-                {
-                    Text = category,
-
-                    Checked =
-                        string.Equals(
-                            category,
-                            current,
-                            StringComparison.OrdinalIgnoreCase)
-                };
-
-            var picked =
-                category;
-
-            item.Click +=
-                (_, _) =>
-                {
-                    _textBox.Text = picked;
-                    _textBox.Focus();
-                };
-
-            menu.Items.Add(item);
-        }
-
-        menu.Show(
-            anchor,
-            new PointF(
-                0,
-                anchor.Height + 2));
+        popup.ShowBelow(
+            anchor);
     }
 
     private sealed class ChevronButton : Drawable
