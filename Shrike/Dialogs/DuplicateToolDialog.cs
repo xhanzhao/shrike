@@ -7,15 +7,17 @@ namespace Shrike.Dialogs;
 public sealed class DuplicateToolDialog : Dialog<bool>
 {
     private readonly TextBox _nameTextBox;
-    private readonly TextBox _categoryTextBox;
+    private readonly ComboBox _categoryComboBox;
 
     public string NewName =>
         (_nameTextBox.Text ?? string.Empty).Trim();
 
     public string Category =>
-        (_categoryTextBox.Text ?? string.Empty).Trim();
+        DialogLayout.ReadCategory(_categoryComboBox);
 
-    public DuplicateToolDialog(ToolDefinition sourceTool)
+    public DuplicateToolDialog(
+        ToolDefinition sourceTool,
+        IEnumerable<string> existingCategories)
     {
         Title = "Duplicate Tool";
         Width = 440;
@@ -27,10 +29,10 @@ public sealed class DuplicateToolDialog : Dialog<bool>
             Text = $"{sourceTool.Name} Copy"
         };
 
-        _categoryTextBox = new TextBox
-        {
-            Text = sourceTool.Category
-        };
+        _categoryComboBox =
+            DialogLayout.CategoryComboBox(
+                existingCategories,
+                sourceTool.Category);
 
         var duplicateButton = new Button
         {
@@ -62,7 +64,7 @@ public sealed class DuplicateToolDialog : Dialog<bool>
 
         layout.AddRow(
             new Label { Text = "Category" },
-            _categoryTextBox);
+            _categoryComboBox);
 
         layout.AddSeparateRow(
             null,

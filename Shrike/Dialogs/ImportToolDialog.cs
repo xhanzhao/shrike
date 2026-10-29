@@ -7,18 +7,18 @@ namespace Shrike.Dialogs;
 public sealed class ImportToolDialog : Dialog<bool>
 {
     private readonly TextBox _nameTextBox;
-    private readonly TextBox _categoryTextBox;
+    private readonly ComboBox _categoryComboBox;
 
     public string ToolName =>
         (_nameTextBox.Text ?? string.Empty)
         .Trim();
 
     public string Category =>
-        (_categoryTextBox.Text ?? string.Empty)
-        .Trim();
+        DialogLayout.ReadCategory(_categoryComboBox);
 
     public ImportToolDialog(
-        ToolPackageInfo packageInfo)
+        ToolPackageInfo packageInfo,
+        IEnumerable<string> existingCategories)
     {
         Title = "Import Shrike Tool";
         Width = 440;
@@ -30,11 +30,10 @@ public sealed class ImportToolDialog : Dialog<bool>
                 Text = packageInfo.Name
             };
 
-        _categoryTextBox =
-            new TextBox
-            {
-                Text = packageInfo.Category
-            };
+        _categoryComboBox =
+            DialogLayout.CategoryComboBox(
+                existingCategories,
+                packageInfo.Category);
 
         var importButton =
             new Button
@@ -77,7 +76,7 @@ public sealed class ImportToolDialog : Dialog<bool>
 
         layout.AddRow(
             new Label { Text = "Category" },
-            _categoryTextBox);
+            _categoryComboBox);
 
         layout.AddRow(
             null,

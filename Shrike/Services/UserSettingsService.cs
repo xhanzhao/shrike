@@ -22,6 +22,20 @@ public sealed class UserSettingsService
             new(StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The panel is black and white, so tool and category
+    /// highlights are shades of gray only.
+    /// </summary>
+    public static IReadOnlyList<(string Name, string Hex)> ColorPresets { get; } =
+        new (string Name, string Hex)[]
+        {
+            ("Light Gray", "#F0F0F0"),
+            ("Gray", "#D9D9D9"),
+            ("Mid Gray", "#A6A6A6"),
+            ("Dark Gray", "#595959"),
+            ("Black", "#1F1F1F")
+        };
+
     private readonly JsonSerializerOptions _jsonOptions =
         new()
         {
