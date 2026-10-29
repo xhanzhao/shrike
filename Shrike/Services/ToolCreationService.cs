@@ -14,6 +14,8 @@ public sealed class ToolCreationService
     private const string DefaultMacroIconResource =
         "Shrike.Resources.DefaultMacroIcon.png";
 
+    private readonly ToolHistoryService _historyService = new();
+
     private readonly JsonSerializerOptions _jsonOptions =
         new()
         {
@@ -44,7 +46,11 @@ public sealed class ToolCreationService
                 $"Unsupported tool type: {request.Type}");
         }
 
-        if (type == "python3")
+        var hasSourceCode =
+            !string.IsNullOrWhiteSpace(
+                request.SourceCode);
+
+        if (type == "python3" && !hasSourceCode)
         {
             if (string.IsNullOrWhiteSpace(
                     request.SourcePythonPath)
@@ -65,7 +71,8 @@ public sealed class ToolCreationService
                     "The source file must be a .py file.");
             }
         }
-        else if (string.IsNullOrWhiteSpace(
+        else if (type == "macro"
+                 && string.IsNullOrWhiteSpace(
                      request.Macro))
         {
             return ToolCreationResult.Fail(
@@ -130,11 +137,26 @@ public sealed class ToolCreationService
                         destination,
                         "main.py");
 
-                CopyPython3Script(
-                    request.SourcePythonPath,
-                    mainPyPath);
+                if (hasSourceCode)
+                {
+                    WritePython3Script(
+                        request.SourceCode,
+                        mainPyPath);
+                }
+                else
+                {
+                    CopyPython3Script(
+                        request.SourcePythonPath,
+                        mainPyPath);
+                }
 
                 manifest["entry"] = "main.py";
+
+                // The first entry in the version history.
+                _historyService.Snapshot(
+                    destination,
+                    mainPyPath,
+                    ToolHistoryReason.Created);
             }
             else
             {
@@ -218,9 +240,15 @@ public sealed class ToolCreationService
         string sourcePath,
         string destinationPath)
     {
-        var source =
-            File.ReadAllText(sourcePath);
+        WritePython3Script(
+            File.ReadAllText(sourcePath),
+            destinationPath);
+    }
 
+    private static void WritePython3Script(
+        string source,
+        string destinationPath)
+    {
         var trimmedStart =
             source.TrimStart();
 
@@ -260,7 +288,7 @@ public sealed class ToolCreationService
                 destination,
                 "icon.png");
 
-        // 用户自己选择 Icon 时优先使用。
+        // A user-selected icon always wins.
         if (!string.IsNullOrWhiteSpace(sourceIconPath))
         {
             if (!File.Exists(sourceIconPath))
@@ -287,7 +315,7 @@ public sealed class ToolCreationService
             return "icon.png";
         }
 
-        // 没选 Icon 时根据 Tool Type 使用默认 Icon。
+        // Without a selected icon, use the default icon for the tool type.
         var resourceName =
             string.Equals(
                 toolType,

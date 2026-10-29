@@ -24,6 +24,9 @@ public sealed class ToolboxPanel : Panel
     private const string NewToolIconResource =
         "Shrike.Resources.NewToolIcon.png";
 
+    private const string PasteToolIconResource =
+        "Shrike.Resources.PasteToolIcon.png";
+
     private const string ImportToolIconResource =
         "Shrike.Resources.ImportToolIcon.png";
 
@@ -60,6 +63,12 @@ public sealed class ToolboxPanel : Panel
     private IReadOnlyList<ToolDefinition>
         _tools =
             Array.Empty<ToolDefinition>();
+
+    // Tool buttons currently on screen, used to find which tool
+    // a .py file was dropped on.
+    private readonly List<(RoundedButton Button, ToolDefinition Tool)>
+        _toolButtons =
+            new();
 
     public ToolboxPanel()
     {
@@ -133,6 +142,16 @@ public sealed class ToolboxPanel : Panel
             (_, _) =>
                 CreateNewTool();
 
+        var pasteButton =
+            CreateHeaderIconButton(
+                PasteToolIconResource,
+                "New Tool from Clipboard",
+                headerControlHeight);
+
+        pasteButton.Click +=
+            (_, _) =>
+                CreateToolFromClipboard();
+
         var importButton =
             CreateHeaderIconButton(
                 ImportToolIconResource,
@@ -172,6 +191,7 @@ public sealed class ToolboxPanel : Panel
 
                     managementButton,
                     createButton,
+                    pasteButton,
                     importButton,
                     refreshButton
                 }
@@ -252,8 +272,27 @@ public sealed class ToolboxPanel : Panel
             new Scrollable
             {
                 ExpandContentWidth = true,
-                Content = toolListHost
+                Content = toolListHost,
+                AllowDrop = true
             };
+
+        // Drop a .py file on empty space to create a tool,
+        // or on a tool to replace its script.
+        scrollable.DragEnter +=
+            (_, e) =>
+                e.Effects =
+                    GetDropEffect(e);
+
+        scrollable.DragOver +=
+            (_, e) =>
+                e.Effects =
+                    GetDropEffect(e);
+
+        scrollable.DragDrop +=
+            (_, e) =>
+                OnPythonFileDropped(
+                    scrollable,
+                    e);
 
         Content =
             new StackLayout
@@ -468,7 +507,8 @@ public sealed class ToolboxPanel : Panel
     }
 
     private void CreateNewTool(
-        CreateToolRequest? initialRequest = null)
+        CreateToolRequest? initialRequest = null,
+        ClipboardCodeResult? initialCode = null)
     {
         if (_macroRecorderService.IsRecording)
         {
@@ -481,7 +521,8 @@ public sealed class ToolboxPanel : Panel
 
         var dialog =
             new CreateToolDialog(
-                initialRequest);
+                initialRequest,
+                initialCode);
 
         var accepted =
             ShowDialog(dialog);
@@ -522,6 +563,148 @@ public sealed class ToolboxPanel : Panel
             "Shrike",
             MessageBoxButtons.OK,
             MessageBoxType.Information);
+    }
+
+    private void CreateToolFromClipboard()
+    {
+        var code =
+            ReadClipboardCode();
+
+        if (code is null)
+            return;
+
+        CreateNewTool(
+            null,
+            code);
+    }
+
+    private ClipboardCodeResult? ReadClipboardCode()
+    {
+        ClipboardCodeResult code;
+
+        try
+        {
+            code =
+                ClipboardSource.ReadCode();
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                "Shrike could not read the clipboard.\n\n" +
+                ex.Message);
+
+            return null;
+        }
+
+        if (!code.HasCode)
+        {
+            MessageBox.Show(
+                "The clipboard is empty.\n\n" +
+                "Copy Python code from your AI chat, " +
+                "or copy a .py file in File Explorer, then try again.",
+                "Shrike",
+                MessageBoxButtons.OK,
+                MessageBoxType.Information);
+
+            return null;
+        }
+
+        return code;
+    }
+
+    private static IReadOnlyList<string> GetDroppedPythonFiles(
+        DataObject? data)
+    {
+        if (data is null
+            || !data.ContainsUris
+            || data.Uris is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        return data.Uris
+            .Where(
+                uri =>
+                    uri.IsFile)
+            .Select(
+                uri =>
+                    uri.LocalPath)
+            .Where(
+                ClipboardSource.IsPythonFile)
+            .ToList();
+    }
+
+    private static DragEffects GetDropEffect(
+        DragEventArgs e)
+    {
+        return GetDroppedPythonFiles(e.Data).Count > 0
+            ? DragEffects.Copy
+            : DragEffects.None;
+    }
+
+    private void OnPythonFileDropped(
+        Control dropTarget,
+        DragEventArgs e)
+    {
+        var files =
+            GetDroppedPythonFiles(
+                e.Data);
+
+        if (files.Count == 0)
+            return;
+
+        var screenPoint =
+            dropTarget.PointToScreen(
+                e.Location);
+
+        var targetTool =
+            _toolButtons
+                .Where(
+                    item =>
+                        item.Button.Visible
+                        &&
+                        new RectangleF(
+                                item.Button.Size)
+                            .Contains(
+                                item.Button.PointFromScreen(
+                                    screenPoint)))
+                .Select(
+                    item =>
+                        item.Tool)
+                .FirstOrDefault();
+
+        var path =
+            files[0];
+
+        var skipped =
+            files.Count - 1;
+
+        // Leave the drag-and-drop operation before showing dialogs,
+        // so File Explorer is not blocked while a dialog is open.
+        Application.Instance?.AsyncInvoke(
+            () =>
+            {
+                if (targetTool is null)
+                {
+                    CreateNewTool(
+                        null,
+                        ClipboardSource.ReadFile(
+                            path));
+                }
+                else
+                {
+                    ReplaceToolScriptWithFile(
+                        targetTool,
+                        path);
+                }
+
+                if (skipped > 0)
+                {
+                    RhinoApp.WriteLine(
+                        $"Shrike: only the first dropped file was used; " +
+                        $"{skipped} other file(s) were ignored.");
+                }
+            });
     }
 
     private void StartMacroRecording(
@@ -871,23 +1054,35 @@ public sealed class ToolboxPanel : Panel
             return;
         }
 
-        var confirmation =
-            MessageBox.Show(
-                $"Replace the current script for \"{tool.Name}\"?\n\n" +
-                "The existing script will be overwritten.",
-                "Replace Script",
-                MessageBoxButtons.YesNo,
-                MessageBoxType.Warning);
+        ReplaceToolScriptWithFile(
+            tool,
+            dialog.FileName);
+    }
 
-        if (confirmation !=
-            DialogResult.Yes)
+    private void ReplaceToolScriptWithFile(
+        ToolDefinition tool,
+        string path)
+    {
+        if (!IsPythonTool(tool))
+            return;
+
+        if (!_managementService.CanModify(tool))
+        {
+            ShowReadOnlyMessage();
+            return;
+        }
+
+        if (!ConfirmReplaceScript(
+                tool,
+                Path.GetFileName(path),
+                Array.Empty<string>()))
         {
             return;
         }
 
         if (!_managementService.ReplaceScript(
                 tool,
-                dialog.FileName,
+                path,
                 out var error))
         {
             ShowError(error);
@@ -899,6 +1094,92 @@ public sealed class ToolboxPanel : Panel
             "Shrike",
             MessageBoxButtons.OK,
             MessageBoxType.Information);
+    }
+
+    private void ReplaceToolScriptFromClipboard(
+        ToolDefinition tool)
+    {
+        if (!IsPythonTool(tool))
+            return;
+
+        if (!_managementService.CanModify(tool))
+        {
+            ShowReadOnlyMessage();
+            return;
+        }
+
+        var code =
+            ReadClipboardCode();
+
+        if (code is null)
+            return;
+
+        if (!ConfirmReplaceScript(
+                tool,
+                code.Summary,
+                code.Warnings))
+        {
+            return;
+        }
+
+        if (!_managementService.ReplaceScriptContent(
+                tool,
+                code.Code,
+                ToolHistoryReason.BeforeReplaceFromClipboard,
+                out var error))
+        {
+            ShowError(error);
+            return;
+        }
+
+        MessageBox.Show(
+            $"Replaced script for \"{tool.Name}\".",
+            "Shrike",
+            MessageBoxButtons.OK,
+            MessageBoxType.Information);
+    }
+
+    private bool ConfirmReplaceScript(
+        ToolDefinition tool,
+        string sourceDescription,
+        IReadOnlyCollection<string> warnings)
+    {
+        var message =
+            $"Replace the script of \"{tool.Name}\" with:\n" +
+            $"{sourceDescription}\n\n" +
+            "The current script is saved to Version History, " +
+            "so you can roll back.";
+
+        if (warnings.Count > 0)
+        {
+            message +=
+                "\n\n" +
+                string.Join(
+                    "\n",
+                    warnings);
+        }
+
+        return MessageBox.Show(
+                   message,
+                   "Replace Script",
+                   MessageBoxButtons.YesNo,
+                   MessageBoxType.Question)
+               == DialogResult.Yes;
+    }
+
+    private void ShowVersionHistory(
+        ToolDefinition tool)
+    {
+        if (!IsPythonTool(tool))
+            return;
+
+        var dialog =
+            new ToolHistoryDialog(
+                tool,
+                _managementService.History,
+                _managementService);
+
+        ShowDialog(dialog);
     }
 
     private void DuplicateTool(
@@ -1411,6 +1692,34 @@ public sealed class ToolboxPanel : Panel
                     ReplaceToolScript(tool);
 
             menu.Items.Add(replaceScriptItem);
+
+            var replaceFromClipboardItem =
+                new ButtonMenuItem
+                {
+                    Text = "Replace Script from Clipboard",
+                    Enabled =
+                        _managementService.CanModify(tool)
+                };
+
+            replaceFromClipboardItem.Click +=
+                (_, _) =>
+                    ReplaceToolScriptFromClipboard(tool);
+
+            menu.Items.Add(replaceFromClipboardItem);
+
+            var historyItem =
+                new ButtonMenuItem
+                {
+                    Text = "Version History...",
+                    Enabled =
+                        _managementService.CanModify(tool)
+                };
+
+            historyItem.Click +=
+                (_, _) =>
+                    ShowVersionHistory(tool);
+
+            menu.Items.Add(historyItem);
         }
 
         if (IsMacroTool(tool))
@@ -1654,63 +1963,36 @@ public sealed class ToolboxPanel : Panel
                 presetItem);
         }
 
-        parent.Items.Add(
-            new SeparatorMenuItem());
-
-        var customItem =
-            new ButtonMenuItem
-            {
-                Text = "Custom..."
-            };
-
-        customItem.Click +=
-            (_, _) =>
-            {
-                var initialColor =
-                    TryParseUiColor(
-                        currentColorHex,
-                        out var parsed)
-                        ? parsed
-                        : SystemColors.ControlBackground;
-
-                var dialog =
-                    new ColorDialog
-                    {
-                        Color = initialColor
-                    };
-
-                var result =
-                    dialog.ShowDialog(
-                        this);
-
-                if (result !=
-                    DialogResult.Ok)
-                {
-                    return;
-                }
-
-                applyColor(
-                    ToColorHex(
-                        dialog.Color));
-            };
-
-        parent.Items.Add(
-            customItem);
     }
 
     private static IReadOnlyList<(string Name, string Hex)>
         GetColorPresets()
     {
+        // The panel is black and white, so tool and category
+        // highlights are shades of gray only.
         return new (string Name, string Hex)[]
         {
-            ("Red", "#F8DEDE"),
-            ("Orange", "#F7E6D2"),
-            ("Yellow", "#F8F1C9"),
-            ("Green", "#DDEEDF"),
-            ("Blue", "#DDEAF7"),
-            ("Purple", "#E8DFF2"),
-            ("Gray", "#E5E7EA")
+            ("Light Gray", "#F0F0F0"),
+            ("Gray", "#D9D9D9"),
+            ("Mid Gray", "#A6A6A6"),
+            ("Dark Gray", "#595959"),
+            ("Black", "#1F1F1F")
         };
+    }
+
+    private static Color ToGray(
+        Color color)
+    {
+        var luminance =
+            0.299f * color.R
+            + 0.587f * color.G
+            + 0.114f * color.B;
+
+        return new Color(
+            luminance,
+            luminance,
+            luminance,
+            color.A);
     }
 
     private static bool TryParseUiColor(
@@ -1724,6 +2006,10 @@ public sealed class ToolboxPanel : Panel
                 colorHex,
                 out color))
         {
+            // Colors saved by older versions are shown as gray.
+            color =
+                ToGray(color);
+
             return true;
         }
 
@@ -1733,16 +2019,12 @@ public sealed class ToolboxPanel : Panel
         return false;
     }
 
-    private static string ToColorHex(
-        Color color)
-    {
-        return
-            $"#{color.Rb:X2}{color.Gb:X2}{color.Bb:X2}";
-    }
 
     private void RebuildToolList()
     {
         _toolList.Items.Clear();
+
+        _toolButtons.Clear();
 
         var query =
             (_searchBox.Text
@@ -2039,6 +2321,9 @@ public sealed class ToolboxPanel : Panel
         button.ContextMenu =
             CreateToolContextMenu(
                 tool);
+
+        _toolButtons.Add(
+            (button, tool));
 
         return button;
     }

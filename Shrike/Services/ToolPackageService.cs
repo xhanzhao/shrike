@@ -521,6 +521,16 @@ public sealed class ToolPackageService
                          "*",
                          SearchOption.AllDirectories))
             {
+                // Version history and run data are private to this
+                // computer and are never exported.
+                if (ToolHistoryService.IsInternalPath(
+                        Path.GetRelativePath(
+                            root,
+                            file)))
+                {
+                    continue;
+                }
+
                 var relativePath =
                     Path.GetRelativePath(
                         root,
@@ -823,6 +833,12 @@ public sealed class ToolPackageService
                  Directory.GetDirectories(
                      source))
         {
+            if (ToolHistoryService.IsInternalPath(
+                    directory))
+            {
+                continue;
+            }
+
             CopyDirectory(
                 directory,
                 Path.Combine(

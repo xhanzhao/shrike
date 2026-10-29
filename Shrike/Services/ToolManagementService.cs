@@ -16,6 +16,11 @@ public sealed class ToolManagementService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    private readonly ToolHistoryService _historyService = new();
+
+    public ToolHistoryService History =>
+        _historyService;
+
     public bool CanModify(ToolDefinition tool)
     {
         if (tool is null
@@ -192,15 +197,6 @@ public sealed class ToolManagementService
     {
         error = string.Empty;
 
-        if (!CanModify(tool))
-        {
-            error =
-                "Bundled tools are read-only. " +
-                "Only user-created tools can replace their script.";
-
-            return false;
-        }
-
         if (string.IsNullOrWhiteSpace(sourcePythonPath)
             || !File.Exists(sourcePythonPath))
         {
@@ -217,78 +213,79 @@ public sealed class ToolManagementService
             return false;
         }
 
+        // Selecting the current script itself should simply succeed.
+        if (string.Equals(
+                Path.GetFullPath(sourcePythonPath),
+                GetEntryPath(tool),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        string source;
+
         try
         {
-            var destinationPath =
-                GetEntryPath(tool);
+            source =
+                File.ReadAllText(sourcePythonPath);
+        }
+        catch (Exception ex)
+        {
+            error =
+                "Shrike could not read the Python script.\n\n" +
+                ex.Message;
 
-            var sourceFullPath =
-                Path.GetFullPath(sourcePythonPath);
+            return false;
+        }
 
-            var destinationFullPath =
-                Path.GetFullPath(destinationPath);
+        return ReplaceScriptContent(
+            tool,
+            source,
+            ToolHistoryReason.BeforeReplaceFromFile,
+            out error);
+    }
 
-            // Selecting the current script itself should simply succeed.
-            if (string.Equals(
-                    sourceFullPath,
-                    destinationFullPath,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+    /// <summary>
+    /// Replaces the entry .py file with the given source code.
+    ///
+    /// The current script is saved to the tool's version history
+    /// first, so every replacement can be rolled back.
+    /// </summary>
+    public bool ReplaceScriptContent(
+        ToolDefinition tool,
+        string source,
+        ToolHistoryReason reason,
+        out string error)
+    {
+        error = string.Empty;
 
-            var source =
-                File.ReadAllText(sourceFullPath);
+        if (!CanModify(tool))
+        {
+            error =
+                "Bundled tools are read-only. " +
+                "Only user-created tools can replace their script.";
 
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            error = "The replacement script is empty.";
+            return false;
+        }
+
+        try
+        {
             var processed =
                 PreparePython3Script(source);
 
-            var destinationDirectory =
-                Path.GetDirectoryName(destinationFullPath);
+            _historyService.Snapshot(
+                tool,
+                reason);
 
-            if (string.IsNullOrWhiteSpace(destinationDirectory))
-            {
-                error =
-                    "Shrike could not determine the script destination folder.";
-
-                return false;
-            }
-
-            Directory.CreateDirectory(
-                destinationDirectory);
-
-            // Write to a temporary file first so the existing main.py
-            // is not damaged if reading/writing the replacement fails.
-            var tempPath =
-                Path.Combine(
-                    destinationDirectory,
-                    $".Shrike_replace_{Guid.NewGuid():N}.tmp");
-
-            try
-            {
-                File.WriteAllText(
-                    tempPath,
-                    processed,
-                    new UTF8Encoding(false));
-
-                File.Copy(
-                    tempPath,
-                    destinationFullPath,
-                    overwrite: true);
-            }
-            finally
-            {
-                if (File.Exists(tempPath))
-                {
-                    try
-                    {
-                        File.Delete(tempPath);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
+            WriteEntryScript(
+                tool,
+                processed);
 
             return true;
         }
@@ -299,6 +296,95 @@ public sealed class ToolManagementService
                 ex.Message;
 
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Restores a version from the tool's history.
+    /// The current script is saved first, so a rollback can be undone.
+    /// </summary>
+    public bool RollbackScript(
+        ToolDefinition tool,
+        ToolHistoryEntry entry,
+        out string error)
+    {
+        error = string.Empty;
+
+        string source;
+
+        try
+        {
+            source =
+                _historyService.ReadEntry(
+                    tool,
+                    entry);
+        }
+        catch (Exception ex)
+        {
+            error =
+                "Shrike could not read this version.\n\n" +
+                ex.Message;
+
+            return false;
+        }
+
+        return ReplaceScriptContent(
+            tool,
+            source,
+            ToolHistoryReason.BeforeRollback,
+            out error);
+    }
+
+    private static void WriteEntryScript(
+        ToolDefinition tool,
+        string content)
+    {
+        var destinationFullPath =
+            GetEntryPath(tool);
+
+        var destinationDirectory =
+            Path.GetDirectoryName(destinationFullPath);
+
+        if (string.IsNullOrWhiteSpace(destinationDirectory))
+        {
+            throw new InvalidOperationException(
+                "Shrike could not determine the script destination folder.");
+        }
+
+        Directory.CreateDirectory(
+            destinationDirectory);
+
+        // Write to a temporary file first so the existing main.py
+        // is not damaged if writing the replacement fails.
+        var tempPath =
+            Path.Combine(
+                destinationDirectory,
+                $".Shrike_replace_{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            File.WriteAllText(
+                tempPath,
+                content,
+                new UTF8Encoding(false));
+
+            File.Copy(
+                tempPath,
+                destinationFullPath,
+                overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                try
+                {
+                    File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+            }
         }
     }
 
@@ -1201,6 +1287,10 @@ public sealed class ToolManagementService
         foreach (var directory in
                  Directory.GetDirectories(source))
         {
+            // Version history stays with the original tool.
+            if (ToolHistoryService.IsInternalPath(directory))
+                continue;
+
             var target =
                 Path.Combine(
                     destination,
