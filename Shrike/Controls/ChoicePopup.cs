@@ -230,30 +230,6 @@ public sealed class ChoicePopup : Form
     }
 
     /// <summary>
-    /// The popup's 1px outline.
-    /// </summary>
-    private sealed class PopupFrame : Drawable
-    {
-        public PopupFrame()
-        {
-            BackgroundColor = Ui.Surface;
-        }
-
-        protected override void OnPaint(
-            PaintEventArgs e)
-        {
-            base.OnPaint(e);
-
-            Draw.Frame(
-                e.Graphics,
-                new RectangleF(0, 0, Width, Height),
-                1f,
-                Ui.RuleStrong,
-                Ui.Surface);
-        }
-    }
-
-    /// <summary>
     /// A row under the list for an action rather than a choice,
     /// e.g. "New category...".
     /// </summary>
@@ -543,5 +519,29 @@ public sealed class ChoicePopup : Form
                 center,
                 Ui.Ink);
         }
+    }
+}
+
+/// <summary>
+/// The 1px outline of Shrike's popups.
+/// </summary>
+internal sealed class PopupFrame : Drawable
+{
+    public PopupFrame()
+    {
+        BackgroundColor = Ui.Surface;
+    }
+
+    protected override void OnPaint(
+        PaintEventArgs e)
+    {
+        base.OnPaint(e);
+
+        Draw.Frame(
+            e.Graphics,
+            new RectangleF(0, 0, Width, Height),
+            1f,
+            Ui.RuleStrong,
+            Ui.Surface);
     }
 }

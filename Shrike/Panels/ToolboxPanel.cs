@@ -238,39 +238,18 @@ public sealed class ToolboxPanel : Panel
         Control anchor)
     {
         var menu =
-            new ContextMenu();
+            new MenuPopup();
 
-        var newItem =
-            new ButtonMenuItem
-            {
-                Text = "New Tool..."
-            };
+        menu.Add(
+            "New Tool...",
+            CreateNewTool);
 
-        newItem.Click +=
-            (_, _) =>
-                CreateNewTool();
+        menu.Add(
+            "Import Tool...",
+            ImportTool);
 
-        menu.Items.Add(
-            newItem);
-
-        var importItem =
-            new ButtonMenuItem
-            {
-                Text = "Import Tool..."
-            };
-
-        importItem.Click +=
-            (_, _) =>
-                ImportTool();
-
-        menu.Items.Add(
-            importItem);
-
-        menu.Show(
-            anchor,
-            new PointF(
-                0,
-                anchor.Height));
+        menu.ShowBelow(
+            anchor);
     }
 
     private void ShowStatus(
@@ -328,77 +307,41 @@ public sealed class ToolboxPanel : Panel
     private void ShowPanelManagementMenu(
         Control anchor)
     {
+        // Expanding and collapsing do nothing while searching:
+        // every category with a match is shown open.
         var isSearching =
             !string.IsNullOrWhiteSpace(
                 _searchBox.Text);
 
         var menu =
-            new ContextMenu();
+            new MenuPopup();
 
-        var expandAllItem =
-            new ButtonMenuItem
-            {
-                Text = "Expand All",
-                Enabled = !isSearching
-            };
-
-        expandAllItem.Click +=
-            (_, _) =>
+        menu.Add(
+            "Expand All",
+            () =>
                 SetAllCategoriesExpanded(
-                    true);
+                    true),
+            enabled: !isSearching);
 
-        menu.Items.Add(
-            expandAllItem);
-
-        var collapseAllItem =
-            new ButtonMenuItem
-            {
-                Text = "Collapse All",
-                Enabled = !isSearching
-            };
-
-        collapseAllItem.Click +=
-            (_, _) =>
+        menu.Add(
+            "Collapse All",
+            () =>
                 SetAllCategoriesExpanded(
-                    false);
+                    false),
+            enabled: !isSearching);
 
-        menu.Items.Add(
-            collapseAllItem);
+        menu.AddSeparator();
 
-        menu.Items.Add(
-            new SeparatorMenuItem());
+        menu.Add(
+            "Refresh",
+            ReloadTools);
 
-        var refreshItem =
-            new ButtonMenuItem
-            {
-                Text = "Refresh"
-            };
+        menu.Add(
+            "Open User Tools Folder",
+            OpenUserToolsFolder);
 
-        refreshItem.Click +=
-            (_, _) =>
-                ReloadTools();
-
-        menu.Items.Add(
-            refreshItem);
-
-        var openUserToolsFolderItem =
-            new ButtonMenuItem
-            {
-                Text = "Open User Tools Folder"
-            };
-
-        openUserToolsFolderItem.Click +=
-            (_, _) =>
-                OpenUserToolsFolder();
-
-        menu.Items.Add(
-            openUserToolsFolderItem);
-
-        menu.Show(
-            anchor,
-            new PointF(
-                0,
-                anchor.Height));
+        menu.ShowBelow(
+            anchor);
     }
 
     private void SetAllCategoriesExpanded(
