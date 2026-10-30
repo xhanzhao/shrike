@@ -198,28 +198,8 @@ public sealed class ToolCreationService
         var source =
             File.ReadAllText(sourcePath);
 
-        var trimmedStart =
-            source.TrimStart();
-
-        if (trimmedStart.StartsWith(
-                "#! python 2",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "This script explicitly requests Python 2. " +
-                "Shrike tools currently use Rhino 8 Python 3.");
-        }
-
-        if (!trimmedStart.StartsWith(
-                "#! python 3",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            source =
-                "#! python 3" +
-                Environment.NewLine +
-                Environment.NewLine +
-                source;
-        }
+        source =
+            PythonScriptHeader.Prepare(source);
 
         File.WriteAllText(
             destinationPath,

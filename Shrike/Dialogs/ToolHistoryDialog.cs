@@ -9,7 +9,8 @@ namespace Shrike.Dialogs;
 
 /// <summary>
 /// Lists the saved versions of a tool's script, previews them,
-/// and rolls the tool back to a selected version.
+/// rolls the tool back to a selected version, and deletes
+/// versions that are no longer needed.
 ///
 /// Result is true when the script was rolled back.
 /// </summary>
@@ -34,6 +35,10 @@ public sealed class ToolHistoryDialog : ShrikeDialog
     private readonly RoundedButton _saveNoteButton;
 
     private readonly RoundedButton _rollbackButton;
+
+    private readonly RoundedButton _deleteButton;
+
+    private readonly RoundedButton _deleteAllButton;
 
     private IReadOnlyList<ToolHistoryEntry> _entries =
         Array.Empty<ToolHistoryEntry>();
@@ -187,6 +192,16 @@ public sealed class ToolHistoryDialog : ShrikeDialog
             "Open folder",
             OpenHistoryFolder);
 
+        _deleteButton =
+            AddFooterAction(
+                "Delete version",
+                DeleteSelected);
+
+        _deleteAllButton =
+            AddFooterAction(
+                "Delete all",
+                DeleteAll);
+
         AddButton(
             "Close",
             Cancel);
@@ -294,6 +309,14 @@ public sealed class ToolHistoryDialog : ShrikeDialog
             entry is not null
             && _managementService.CanModify(_tool);
 
+        _deleteButton.Enabled =
+            entry is not null
+            && _managementService.CanModify(_tool);
+
+        _deleteAllButton.Enabled =
+            _entries.Count > 0
+            && _managementService.CanModify(_tool);
+
         _noteTextBox.Enabled =
             entry is not null;
 
@@ -396,6 +419,84 @@ public sealed class ToolHistoryDialog : ShrikeDialog
         }
 
         _rolledBack = true;
+
+        LoadVersions();
+    }
+
+    private void DeleteSelected()
+    {
+        var entry =
+            SelectedEntry;
+
+        if (entry is null)
+            return;
+
+        var selectedIndex =
+            _versionList.SelectedIndex;
+
+        var confirmation =
+            MessageBox.Show(
+                this,
+                $"Delete the version from " +
+                $"{entry.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm}?\n\n" +
+                "This cannot be undone. The current script is not changed.",
+                "Delete version",
+                MessageBoxButtons.YesNo,
+                MessageBoxType.Warning);
+
+        if (confirmation != DialogResult.Yes)
+            return;
+
+        try
+        {
+            _historyService.DeleteEntry(
+                _tool,
+                entry);
+        }
+        catch (Exception ex)
+        {
+            ShowValidation(
+                "The version could not be deleted: " +
+                ex.Message);
+
+            return;
+        }
+
+        LoadVersions(
+            selectedIndex);
+    }
+
+    private void DeleteAll()
+    {
+        if (_entries.Count == 0)
+            return;
+
+        var confirmation =
+            MessageBox.Show(
+                this,
+                $"Delete all {_entries.Count} saved versions of " +
+                $"\"{_tool.Name}\"?\n\n" +
+                "This cannot be undone. The current script is not changed.",
+                "Delete all versions",
+                MessageBoxButtons.YesNo,
+                MessageBoxType.Warning);
+
+        if (confirmation != DialogResult.Yes)
+            return;
+
+        try
+        {
+            _historyService.DeleteAll(
+                _tool);
+        }
+        catch (Exception ex)
+        {
+            ShowValidation(
+                "The history could not be deleted: " +
+                ex.Message);
+
+            return;
+        }
 
         LoadVersions();
     }

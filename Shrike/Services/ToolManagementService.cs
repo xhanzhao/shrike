@@ -277,7 +277,7 @@ public sealed class ToolManagementService
         try
         {
             var processed =
-                PreparePython3Script(source);
+                PythonScriptHeader.Prepare(source);
 
             _historyService.Snapshot(
                 tool,
@@ -1082,35 +1082,6 @@ public sealed class ToolManagementService
             get;
             set;
         }
-    }
-
-    private static string PreparePython3Script(
-        string source)
-    {
-        var trimmedStart =
-            source.TrimStart();
-
-        if (trimmedStart.StartsWith(
-                "#! python 2",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "This script explicitly requests Python 2. " +
-                "Shrike tools currently use Rhino 8 Python 3.");
-        }
-
-        if (!trimmedStart.StartsWith(
-                "#! python 3",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            source =
-                "#! python 3" +
-                Environment.NewLine +
-                Environment.NewLine +
-                source;
-        }
-
-        return source;
     }
 
     private void UpdateDuplicatedManifest(

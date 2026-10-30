@@ -116,7 +116,7 @@ public sealed class ToolPackageService
             {
                 error =
                     $"This package is a '{type}' tool.\n\n" +
-                    "Shrike only supports Python 3 tools.";
+                    "Shrike only supports Python tools.";
 
                 return false;
             }
@@ -312,13 +312,13 @@ public sealed class ToolPackageService
             {
                 return ToolCreationResult.Fail(
                     "This package is a Rhino Macro tool.\n\n" +
-                    "Shrike only supports Python 3 tools.");
+                    "Shrike only supports Python tools.");
             }
             else
             {
                 return ToolCreationResult.Fail(
                     $"Unsupported tool type: {type}\n\n" +
-                    "Shrike only supports Python 3 tools.");
+                    "Shrike only supports Python tools.");
             }
 
             SetCanonicalString(
