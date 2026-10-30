@@ -18,6 +18,9 @@ public sealed class ToolboxPanel : Panel
 
     private const int BrandIconSize = 36;
 
+    // Nudges the icon down to sit centered on the two text lines.
+    private const int BrandIconTopOffset = 4;
+
     private const string BrandIconResource =
         "Shrike.Resources.Shrike.ico";
 
@@ -279,6 +282,13 @@ public sealed class ToolboxPanel : Panel
                     new TableCell(
                         new StackLayout
                         {
+                            Padding =
+                                new Padding(
+                                    0,
+                                    BrandIconTopOffset,
+                                    0,
+                                    0),
+
                             Items = { icon }
                         }),
 
