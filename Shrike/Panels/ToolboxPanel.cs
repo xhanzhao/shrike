@@ -16,6 +16,14 @@ public sealed class ToolboxPanel : Panel
 
     private const int HeaderIconDisplaySize = 18;
 
+    private const int BrandIconSize = 32;
+
+    private const string BrandIconResource =
+        "Shrike.Resources.Shrike.ico";
+
+    private const string BrandDescription =
+        "Turns tested, AI-written Python scripts into Rhino commands.";
+
     private const string NewToolIconResource =
         "Shrike.Resources.NewToolIcon.png";
 
@@ -108,7 +116,7 @@ public sealed class ToolboxPanel : Panel
                 ShowPanelManagementMenu(
                     managementButton);
 
-        var header =
+        var toolbar =
             new TableLayout
             {
                 Spacing =
@@ -195,7 +203,9 @@ public sealed class ToolboxPanel : Panel
 
                 Items =
                 {
-                    header,
+                    CreateBrandHeader(),
+
+                    toolbar,
 
                     new StackLayoutItem(
                         scrollable,
@@ -208,6 +218,70 @@ public sealed class ToolboxPanel : Panel
         ReloadTools();
 
         _watchService.Start();
+    }
+
+    /// <summary>
+    /// Shrike's name, mark and a one-line summary of what the
+    /// panel is for, shown above the search bar.
+    /// </summary>
+    private static Control CreateBrandHeader()
+    {
+        var icon =
+            new ImageView
+            {
+                Image =
+                    EmbeddedImageLoader.LoadTintedBitmap(
+                        BrandIconResource,
+                        Ui.Ink),
+
+                Size =
+                    new Size(
+                        BrandIconSize,
+                        BrandIconSize)
+            };
+
+        var text =
+            new StackLayout
+            {
+                Orientation =
+                    Orientation.Vertical,
+
+                Spacing = 2,
+
+                HorizontalContentAlignment =
+                    HorizontalAlignment.Stretch,
+
+                Items =
+                {
+                    Ui.Title(
+                        "Shrike"),
+
+                    new Label
+                    {
+                        Text = BrandDescription,
+                        Wrap = WrapMode.Word,
+                        Font = Ui.SmallFont,
+                        TextColor = Ui.Muted
+                    }
+                }
+            };
+
+        return new TableLayout
+        {
+            Spacing =
+                new Size(10, 0),
+
+            Rows =
+            {
+                new TableRow(
+                    new TableCell(
+                        icon),
+
+                    new TableCell(
+                        text,
+                        scaleWidth: true))
+            }
+        };
     }
 
     private static RoundedButton CreateHeaderIconButton(
