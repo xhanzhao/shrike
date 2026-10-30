@@ -16,13 +16,13 @@ public sealed class ToolboxPanel : Panel
 
     private const int HeaderIconDisplaySize = 18;
 
-    private const int BrandIconSize = 32;
+    private const int BrandIconSize = 36;
 
     private const string BrandIconResource =
         "Shrike.Resources.Shrike.ico";
 
     private const string BrandDescription =
-        "Turns tested, AI-written Python scripts into Rhino commands.";
+        "A manager for AI-generated Python tools, with categories and version history.";
 
     private const string NewToolIconResource =
         "Shrike.Resources.NewToolIcon.png";
@@ -273,9 +273,14 @@ public sealed class ToolboxPanel : Panel
 
             Rows =
             {
+                // The icon is pinned to the top so it lines up with
+                // the title and description, not the cell's middle.
                 new TableRow(
                     new TableCell(
-                        icon),
+                        new StackLayout
+                        {
+                            Items = { icon }
+                        }),
 
                     new TableCell(
                         text,
