@@ -1,0 +1,20 @@
+---
+name: Shrike
+version: 0.1.0
+authors:
+- Han
+description: >
+  Shrike is a side-bar toolbox for Rhino 8 that turns tested Python scripts
+  (for example ones written with ChatGPT or Claude) into one-click tools.
+  Organize tools into categories, give them icons and colors, keep version
+  snapshots, and share them as .shriketool files.
+url: https://github.com/xhanzhao/shrike
+keywords:
+- python
+- scripts
+- toolbox
+- tools
+- panel
+- ai
+- productivity
+icon: icon.png
