@@ -1,5 +1,3 @@
-<p align="center"><img src="yak/icon.png" width="96" alt="Shrike"></p>
-
 # Shrike
 
 Shrike is a side-bar toolbox for **Rhino 8 (Windows)** that turns Python scripts
