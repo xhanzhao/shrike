@@ -53,15 +53,6 @@ Documents\Shrike\Tools\
 Shrike reads tools from `Documents\Shrike\Tools` and from a `Tools` folder next
 to `Shrike.rhp` (tools bundled with the plug-in).
 
-## Build from source
-
-Requirements: Visual Studio 2022 (or the .NET 8 SDK) and Rhino 8.
-
-1. Open `Shrike.sln` and build. The `Rhino 8 - netcore` launch profile starts
-   Rhino with the freshly built plug-in.
-2. To publish a release to the Rhino Package Manager, see
-   [yak/README.md](yak/README.md).
-
 ## License
 
 [MIT](LICENSE)
