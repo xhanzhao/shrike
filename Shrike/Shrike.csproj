@@ -29,6 +29,8 @@
   <ItemGroup>
     <None Remove="Resources\Shrike.ico" />
     <EmbeddedResource Include="Resources\Shrike.ico" LogicalName="Shrike.Resources.Shrike.ico" />
+    <None Remove="Resources\PluginIcon.ico" />
+    <EmbeddedResource Include="Resources\PluginIcon.ico" LogicalName="Shrike.Resources.PluginIcon.ico" />
   </ItemGroup>
 
   <!-- CRITICAL:
