@@ -10,7 +10,6 @@ param(
 $ErrorActionPreference = "Stop"
 $root    = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root "Shrike\Shrike.csproj"
-$output  = Join-Path $root "Shrike\bin\Release\net8.0-windows"
 $dist    = Join-Path $PSScriptRoot "dist"
 
 if (-not (Test-Path $Yak)) { throw "Yak.exe not found at '$Yak'. Pass -Yak <path>." }
@@ -21,6 +20,9 @@ $manifestVersion = (Select-String -Path (Join-Path $PSScriptRoot "manifest.yml")
 if ($csprojVersion -ne $manifestVersion) {
     throw "Version mismatch: Shrike.csproj has $csprojVersion, manifest.yml has $manifestVersion."
 }
+
+$framework = ([xml](Get-Content $project)).Project.PropertyGroup.TargetFramework | Where-Object { $_ } | Select-Object -First 1
+$output    = Join-Path $root "Shrike\bin\Release\$framework"
 
 if (-not $SkipBuild) {
     dotnet build $project -c Release
