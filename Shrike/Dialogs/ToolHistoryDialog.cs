@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Eto.Drawing;
 using Eto.Forms;
 using Shrike.Controls;
@@ -74,11 +74,11 @@ public sealed class ToolHistoryDialog : ShrikeDialog
             {
                 ReadOnly = true,
                 Wrap = false,
-                Border = BorderType.None,
                 Font = CodeFont(),
                 BackgroundColor = Ui.Surface,
                 TextColor = Ui.Ink
             };
+        Ui.RemoveBorder(_previewTextArea);
 
         _noteTextBox =
             Ui.TextBox(

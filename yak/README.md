@@ -34,14 +34,14 @@ Rhino account that pushes it first, so always log in with the same account.
 4. Try the test server first. It is wiped regularly and is safe to experiment on:
 
    ```powershell
-   & "C:\Program Files\Rhino 8\System\Yak.exe" push --source https://test.yak.rhino3d.com yak\dist\shrike-0.1.0-rh8_34-win.yak
+   & "C:\Program Files\Rhino 8\System\Yak.exe" push --source https://test.yak.rhino3d.com yak\dist\shrike-0.1.1-rh8_0-win.yak
    & "C:\Program Files\Rhino 8\System\Yak.exe" search --source https://test.yak.rhino3d.com --all --prerelease shrike
    ```
 
 5. Push to the public server:
 
    ```powershell
-   & "C:\Program Files\Rhino 8\System\Yak.exe" push yak\dist\shrike-0.1.0-rh8_34-win.yak
+   & "C:\Program Files\Rhino 8\System\Yak.exe" push yak\dist\shrike-0.1.1-rh8_0-win.yak
    ```
 
 Replace the file name with the one `build-yak.ps1` printed.
@@ -52,6 +52,7 @@ Replace the file name with the one `build-yak.ps1` printed.
   `Yak.exe yank Shrike <version>`, then push a higher version.
 - The `rh8_<n>` part of the file name comes from the RhinoCommon version the
   project references. It is the oldest Rhino 8 service release that will be
-  offered the package.
+  offered the package. Shrike references RhinoCommon 8.0 and targets net7.0 so
+  that every Rhino 8 can install it; keep it that way unless a newer API is needed.
 - A version with a pre-release suffix (for example `0.2.0-beta.1`) is only
   shown to users who tick "Include pre-releases".

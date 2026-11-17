@@ -1,4 +1,4 @@
-using Eto.Drawing;
+﻿using Eto.Drawing;
 using Eto.Forms;
 
 namespace Shrike.Controls;
@@ -209,10 +209,9 @@ internal static class Ui
         string? text = null,
         int height = 52)
     {
-        return new TextArea
+        var textArea = new TextArea
         {
             Text = text ?? string.Empty,
-            Border = BorderType.None,
             Wrap = true,
             AcceptsTab = false,
             // Enter runs the dialog's primary action.
@@ -221,6 +220,20 @@ internal static class Ui
             BackgroundColor = Surface,
             TextColor = Ink
         };
+        RemoveBorder(textArea);
+        return textArea;
+    }
+
+    /// <summary>
+    /// Hides a text area's border. TextArea.Border only exists in the Eto
+    /// that ships with newer Rhino 8 releases, so it is set by reflection
+    /// to keep the plug-in loadable on every Rhino 8.
+    /// </summary>
+    public static void RemoveBorder(TextArea textArea)
+    {
+        textArea.GetType()
+            .GetProperty("Border")
+            ?.SetValue(textArea, BorderType.None);
     }
 
     public static bool IsDark(
