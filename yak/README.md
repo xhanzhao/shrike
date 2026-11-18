@@ -34,14 +34,14 @@ Rhino account that pushes it first, so always log in with the same account.
 4. Try the test server first. It is wiped regularly and is safe to experiment on:
 
    ```powershell
-   & "C:\Program Files\Rhino 8\System\Yak.exe" push --source https://test.yak.rhino3d.com yak\dist\shrike-0.1.1-rh8_0-win.yak
+   & "C:\Program Files\Rhino 8\System\Yak.exe" push --source https://test.yak.rhino3d.com yak\dist\shrike-0.1.2-rh8_0-win.yak
    & "C:\Program Files\Rhino 8\System\Yak.exe" search --source https://test.yak.rhino3d.com --all --prerelease shrike
    ```
 
 5. Push to the public server:
 
    ```powershell
-   & "C:\Program Files\Rhino 8\System\Yak.exe" push yak\dist\shrike-0.1.1-rh8_0-win.yak
+   & "C:\Program Files\Rhino 8\System\Yak.exe" push yak\dist\shrike-0.1.2-rh8_0-win.yak
    ```
 
 Replace the file name with the one `build-yak.ps1` printed.
